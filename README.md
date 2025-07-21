@@ -4,6 +4,9 @@
 This is the GitHub repository for the ICCAD 2025 paper with the same name.
 
 
+The data can be found here: https://1drv.ms/f/c/a31285484594c370/ErPw8IcCU5tCl2CpgQnXkj8BY41yb5YgZAaSnQjNQNRNEw?e=On30Sp
+
+
 How to use the code:
 
  1. Store your SPIKE data and use the 1_read.ipynb file to create the dataset
