@@ -43,13 +43,13 @@ parser.add_argument('--hidden',                type=list,      default=[3],     
 # training-related
 parser.add_argument('--SEED',                  type=int,       default=0,                     help='random seed')
 parser.add_argument('--DEVICE',                type=str,       default='gpu',                 help='device for training')
-parser.add_argument('--PATIENCE',              type=int,       default=500,                   help='patience for early-stopping')
-parser.add_argument('--EPOCH',                 type=int,       default=10**10,                help='maximal epochs')
+parser.add_argument('--PATIENCE',              type=int,       default=75,                   help='patience for early-stopping')
+parser.add_argument('--EPOCH',                 type=int,       default=1000,                help='maximal epochs')
 parser.add_argument('--LR',                    type=float,     default=0.1,                   help='learning rate')
 parser.add_argument('--PROGRESSIVE',           type=bool,      default=True,                  help='whether the learning rate will be adjusted')
-parser.add_argument('--LR_PATIENCE',           type=int,       default=100,                   help='patience for updating learning rate')
+parser.add_argument('--LR_PATIENCE',           type=int,       default=20,                   help='patience for updating learning rate')
 parser.add_argument('--LR_DECAY',              type=float,     default=0.5,                   help='decay of learning rate for progressive lr')
-parser.add_argument('--LR_MIN',                type=float,     default=1e-4,                  help='minimal learning rate for stop training')
+parser.add_argument('--LR_MIN',                type=float,     default=5e-3,                  help='minimal learning rate for stop training')
 # evaluation
 parser.add_argument('--loss',                  type=str,       default='celoss',              help='loss function')
 parser.add_argument('--metric',                type=str,       default='temporal_acc',        help='nominal accuracy or measuring-aware accuracy')
