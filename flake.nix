@@ -21,6 +21,8 @@
             jupyterlab
             polars
             tqdm
+            ipywidgets
+            seaborn
           ]))
         ];
 

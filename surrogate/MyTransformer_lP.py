@@ -161,8 +161,10 @@ class GPT(nn.Module):
                 'gpt-mini': dict(n_layer=6, n_head=6, n_embd=192),
                 'gpt-micro': dict(n_layer=4, n_head=4, n_embd=128),
                 'gpt-nano': dict(n_layer=3, n_head=3, n_embd=48),
+                'pico-test': dict(n_layer=2, n_head=2, n_embd=24),
+                'femto-test': dict(n_layer=1, n_head=1, n_embd=12),
             }[config.model_type])
-
+        
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Linear(1, config.n_embd),  # Token embedding for sequence and extra parameters
             wpe=nn.Embedding(config.block_size, config.n_embd),  # Positional embedding only for sequence
@@ -178,7 +180,10 @@ class GPT(nn.Module):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
 
         n_params = sum(p.numel() for p in self.transformer.parameters())
-        print("number of parameters: %.2fM" % (n_params / 1e6,))
+        if n_params < 1e6:
+            print("number of parameters: %.0fk" % (n_params / 1e3))
+        else:
+            print("number of parameters: %.2fM" % (n_params / 1e6))
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
