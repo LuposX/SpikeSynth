@@ -20,6 +20,7 @@
             matplotlib
             jupyterlab
             polars
+            tqdm
           ]))
         ];
 
