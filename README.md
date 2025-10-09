@@ -1,5 +1,7 @@
 # SpikeSynth: Energy-Efficient Adaptive Analog Printed Spiking Neural Networks
 
+> [!NOTE]
+> This is in development, as part of a bachelor thesis.
 
 This is the GitHub repository for the ICCAD 2025 paper with the same name.
 
@@ -17,7 +19,7 @@ How to use the code:
  Example usage of 2_modeling.py with seed 0 and transformer model gpt-nano:
 
 ~~~
-$ python 2_modeling.py 0 0 
+$ python 2_modeling.py 0 0
 ~~~
 
 Example usage of PrintedSpkingNN_lP.py:
