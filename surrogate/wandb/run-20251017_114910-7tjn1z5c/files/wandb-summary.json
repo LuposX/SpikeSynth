@@ -1,0 +1,1 @@
+{"_timestamp":1.7606945734224524e+09,"_step":1,"graph_0":{"sha256":"c979792704d36cd3b111ff41007aea8a0caf9941d88dbad5f8d8252669a67604","size":1558,"path":"media/graph/graph_0_summary_c979792704d36cd3b111.graph.json","_type":"graph-file"},"_wandb":{"runtime":213},"_runtime":213,"val_loss":0.13994337618350983,"epoch":1,"trainer/global_step":29}

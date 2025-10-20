@@ -1,0 +1,1 @@
+{"epoch":1,"trainer/global_step":29,"graph_0":{"_type":"graph-file","sha256":"c3d70f90de1e95983d15bba826bf5999b89f90dd552ad3c385e59f7149130176","size":1558,"path":"media/graph/graph_0_summary_c3d70f90de1e95983d15.graph.json"},"_wandb":{"runtime":257},"_runtime":257,"_timestamp":1.7606928425976167e+09,"_step":1,"val_loss":0.13430742919445038}

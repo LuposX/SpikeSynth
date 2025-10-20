@@ -1,0 +1,7 @@
+batch_size: 1024
+beta: 0.9
+gamma: 0.9
+lr: 0.01
+num_hidden: 10
+num_hidden_layers: 2
+optimizer_class: !!python/name:torch.optim.adamw.AdamW ''
