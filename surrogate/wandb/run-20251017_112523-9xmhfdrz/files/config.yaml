@@ -1,0 +1,81 @@
+_wandb:
+    value:
+        cli_version: 0.21.4
+        e:
+            106lsbfkpfnqynau1mpvupdmnuwoiy5w:
+                cpu_count: 20
+                cpu_count_logical: 20
+                disk:
+                    /:
+                        total: "539426451456"
+                        used: "147257888768"
+                email: schuppsimon5@gmail.com
+                executable: /nix/store/qsg98l1y41k4530xsn0ss82xrd03095c-python3-3.12.11-env/bin/python3.12
+                git:
+                    commit: 2eb0482a5984eee8fd9625ae8fd7f439e86e85b9
+                    remote: git@github-personal.com:LuposX/SpikeSynth.git
+                host: logos
+                memory:
+                    total: "33063743488"
+                os: Linux-6.12.49-x86_64-with-glibc2.40
+                program: surrogate/Lighning_Pipeline.ipynb
+                python: CPython 3.12.11
+                root: .
+                startedAt: "2025-10-17T09:25:23.630519Z"
+                writerId: 106lsbfkpfnqynau1mpvupdmnuwoiy5w
+        m:
+            - "1": trainer/global_step
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.12.11
+        t:
+            "1":
+                - 1
+                - 9
+                - 103
+            "2":
+                - 1
+                - 9
+                - 103
+            "3":
+                - 1
+                - 7
+                - 13
+                - 62
+                - 66
+            "4": 3.12.11
+            "5": 0.21.4
+            "8":
+                - 1
+            "12": 0.21.4
+            "13": linux-x86_64
+batch_size:
+    value: 2048
+beta:
+    value: 0.9
+criterion:
+    value: MSELoss
+lr:
+    value: 0.001
+num_hidden:
+    value: 128
+num_inputs:
+    value: 1
+num_outputs:
+    value: 100
+num_params:
+    value: 6
+num_voltage_steps:
+    value: 100
+optimizer_class:
+    value: Adam
+train_dataset:
+    value: <torch.utils.data.dataset.TensorDataset object at 0x7ffe2439a840>
+valid_dataset:
+    value: <torch.utils.data.dataset.TensorDataset object at 0x7ffe242aeb10>

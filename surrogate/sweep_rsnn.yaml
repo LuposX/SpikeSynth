@@ -1,0 +1,27 @@
+command:
+- ${env}
+- /nix/store/qsg98l1y41k4530xsn0ss82xrd03095c-python3-3.12.11-env/bin/python
+- train_sweep_rsnn_model.py
+- ${args}
+method: bayes
+metric:
+  name: val_loss
+  goal: minimize
+parameters:
+  lr:
+    values: [0.0005, 0.001, 0.005, 0.01]
+  num_hidden:
+    values: [32, 64, 128, 256, 512]
+  beta:
+    values: [0.85, 0.9, 0.95]
+  batch_size:
+    values: [1024, 2048, 4096]
+  gamma:
+    values: [0.9, 0.95, 0.99]
+  optimizer_class:
+    value: "AdamW"
+  num_hidden_layers:
+      values: [1, 2, 4, 8]
+  epochs:
+    value: 25
+run_cap: 20

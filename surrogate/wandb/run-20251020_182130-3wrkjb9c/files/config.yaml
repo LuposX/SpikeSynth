@@ -1,0 +1,73 @@
+_wandb:
+    value:
+        cli_version: 0.21.4
+        code_path: code/surrogate/train_sweep_rsnn_model.py
+        e:
+            qwhcbkummokj4enjff8dcn9hyhz16546:
+                args:
+                    - --batch_size=4096
+                    - --beta=0.9
+                    - --epochs=25
+                    - --gamma=0.99
+                    - --lr=0.005
+                    - --num_hidden=256
+                    - --num_hidden_layers=1
+                    - --optimizer_class=AdamW
+                codePath: surrogate/train_sweep_rsnn_model.py
+                codePathLocal: train_sweep_rsnn_model.py
+                cpu_count: 20
+                cpu_count_logical: 20
+                disk:
+                    /:
+                        total: "539426451456"
+                        used: "144570798080"
+                email: schuppsimon5@gmail.com
+                executable: /nix/store/qsg98l1y41k4530xsn0ss82xrd03095c-python3-3.12.11-env/bin/python3.12
+                git:
+                    commit: 2eb0482a5984eee8fd9625ae8fd7f439e86e85b9
+                    remote: git@github-personal.com:LuposX/SpikeSynth.git
+                host: logos
+                memory:
+                    total: "33063739392"
+                os: Linux-6.12.49-x86_64-with-glibc2.40
+                program: /home/monkeman/SpikeSynth/surrogate/train_sweep_rsnn_model.py
+                python: CPython 3.12.11
+                root: /home/monkeman/SpikeSynth/surrogate
+                startedAt: "2025-10-20T16:21:30.398929Z"
+                writerId: qwhcbkummokj4enjff8dcn9hyhz16546
+        m: []
+        python_version: 3.12.11
+        t:
+            "1":
+                - 1
+                - 9
+                - 103
+            "2":
+                - 1
+                - 9
+                - 103
+            "3":
+                - 1
+                - 2
+                - 14
+                - 62
+            "4": 3.12.11
+            "5": 0.21.4
+            "12": 0.21.4
+            "13": linux-x86_64
+batch_size:
+    value: 4096
+beta:
+    value: 0.9
+epochs:
+    value: 25
+gamma:
+    value: 0.99
+lr:
+    value: 0.005
+num_hidden:
+    value: 256
+num_hidden_layers:
+    value: 1
+optimizer_class:
+    value: AdamW

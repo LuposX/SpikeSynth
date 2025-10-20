@@ -1,0 +1,18 @@
+wandb_version: 1
+
+batch_size:
+  value: 1024
+beta:
+  value: 0.9
+epochs:
+  value: 25
+gamma:
+  value: 0.99
+lr:
+  value: 0.001
+num_hidden:
+  value: 128
+num_hidden_layers:
+  value: 1
+optimizer_class:
+  value: SGD

@@ -1,0 +1,38 @@
+{
+  "os":  "Linux-6.12.49-x86_64-with-glibc2.40",
+  "python":  "CPython 3.12.11",
+  "startedAt":  "2025-10-18T12:12:19.337944Z",
+  "args":  [
+    "--batch_size=2048",
+    "--beta=0.95",
+    "--epochs=25",
+    "--gamma=0.99",
+    "--lr=0.01",
+    "--num_hidden=128",
+    "--num_hidden_layers=8",
+    "--optimizer_class=SGD"
+  ],
+  "program":  "/home/monkeman/SpikeSynth/surrogate/train_sweep_model.py",
+  "codePath":  "surrogate/train_sweep_model.py",
+  "codePathLocal":  "train_sweep_model.py",
+  "git":  {
+    "remote":  "git@github-personal.com:LuposX/SpikeSynth.git",
+    "commit":  "2eb0482a5984eee8fd9625ae8fd7f439e86e85b9"
+  },
+  "email":  "schuppsimon5@gmail.com",
+  "root":  "/home/monkeman/SpikeSynth/surrogate",
+  "host":  "logos",
+  "executable":  "/nix/store/qsg98l1y41k4530xsn0ss82xrd03095c-python3-3.12.11-env/bin/python3.12",
+  "cpu_count":  20,
+  "cpu_count_logical":  20,
+  "disk":  {
+    "/":  {
+      "total":  "539426451456",
+      "used":  "154268413952"
+    }
+  },
+  "memory":  {
+    "total":  "33063735296"
+  },
+  "writerId":  "ycs1mk7fdsd6tsnpb93es5wjvebqjvq9"
+}

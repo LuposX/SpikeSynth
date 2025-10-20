@@ -1,5 +1,5 @@
 {
-  description = "SpikeSznth Dev Shell";
+  description = "SpikeSynth Dev Shell";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs";
 
@@ -8,12 +8,12 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
 
-      # This needs to be generated:  nix run github:nix-community/pip2nix -- generate -r requirements.txt --output ./snntorch.nix
-      snntorchOverlay = pkgs.callPackage ./snntorch.nix {};
+      # This needs to be generated:  nix run github:nix-community/pip2nix -- generate -r requirements.txt --output ./python-packages.nix
+      pythonOverlay = pkgs.callPackage ./python-packages.nix {};
 
       # Correctly override the python interpreter to create a new package set
-      myPython3 = pkgs.python3.override {
-        packageOverrides = snntorchOverlay;
+      myPython3 = pkgs.python312.override {
+        packageOverrides = pythonOverlay;
       };
     in
     {
@@ -31,6 +31,10 @@
               tqdm
               ipywidgets
               seaborn
+              lightning
+	      wandb
+
+              # Self built
               snntorch
           ]))
         ];

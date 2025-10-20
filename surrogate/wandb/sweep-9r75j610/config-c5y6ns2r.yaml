@@ -1,0 +1,18 @@
+wandb_version: 1
+
+batch_size:
+  value: 2048
+beta:
+  value: 0.9
+epochs:
+  value: 25
+gamma:
+  value: 0.9
+lr:
+  value: 0.005
+num_hidden:
+  value: 128
+num_hidden_layers:
+  value: 2
+optimizer_class:
+  value: AdamW

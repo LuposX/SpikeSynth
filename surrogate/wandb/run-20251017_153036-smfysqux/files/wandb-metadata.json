@@ -1,0 +1,26 @@
+{
+  "os":  "Linux-6.12.49-x86_64-with-glibc2.40",
+  "python":  "CPython 3.12.11",
+  "startedAt":  "2025-10-17T13:30:36.860809Z",
+  "program":  "surrogate/Lighning_Pipeline.ipynb",
+  "git":  {
+    "remote":  "git@github-personal.com:LuposX/SpikeSynth.git",
+    "commit":  "2eb0482a5984eee8fd9625ae8fd7f439e86e85b9"
+  },
+  "email":  "schuppsimon5@gmail.com",
+  "root":  "/home/monkeman/SpikeSynth/surrogate",
+  "host":  "logos",
+  "executable":  "/nix/store/qsg98l1y41k4530xsn0ss82xrd03095c-python3-3.12.11-env/bin/python3.12",
+  "cpu_count":  20,
+  "cpu_count_logical":  20,
+  "disk":  {
+    "/":  {
+      "total":  "539426451456",
+      "used":  "152826515456"
+    }
+  },
+  "memory":  {
+    "total":  "33063743488"
+  },
+  "writerId":  "rc2dnjj7td5kh75s3gl0pdcjncsd4weq"
+}

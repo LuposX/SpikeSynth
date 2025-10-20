@@ -4,3 +4,5 @@ __pycache__/
 .ds
 surrogate/data/*
 surrogate/temp/*
+*.ckpt
+*.log
