@@ -1,7 +1,5 @@
 import torch
 import torch.nn as nn
-from MyTransformer import GPT  
-torch.serialization.add_safe_globals([GPT])  
 
 # ===============================================================================
 # ============================ Single Spike Generator ===========================
@@ -9,15 +7,12 @@ torch.serialization.add_safe_globals([GPT])
 
 
 class pSpikeGenerator(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, model_class, ckpt_path):
         super().__init__()
         self.args = args
 
         # Load frozen spike generator
-        self.spike_generator = torch.load(
-            './surrogate/NNs/predictor_final',
-            map_location=self.DEVICE, weights_only=False
-        )
+        self.spike_generator = model_class.load_from_checkpoint(ckpt_path, map_location=self.DEVICE)
         
         self.spike_generator.train(False)
         for param in self.spike_generator.parameters():
@@ -64,11 +59,11 @@ class pSpikeGenerator(nn.Module):
 # ===============================================================================
 
 class SGLayer(torch.nn.Module):
-    def __init__(self, N, args):
+    def __init__(self, N, args, model_class, ckpt_path):
         super().__init__()
         self.args = args
         self.SG_Group = torch.nn.ModuleList(
-            [pSpikeGenerator(args) for _ in range(N)])
+            [pSpikeGenerator(args, model_class, ckpt_path) for _ in range(N)])
 
     @property
     def DEVICE(self):
@@ -102,12 +97,12 @@ class Inv(torch.nn.Module):
 # ============================= Printed Layer ===================================
 # ===============================================================================
 
-class pLayer(torch.nn.Module):
+class pLayer(torch.nn.Module, model_class, ckpt_path):
     def __init__(self, n_in, n_out, args, INV):
         super().__init__()
         self.args = args
         # define spike generators
-        self.SG = SGLayer(n_out, args)
+        self.SG = SGLayer(n_out, args, model_class, ckpt_path)
         # define nonlinear circuits
         self.INV = INV
         # initialize conductances for weights
@@ -222,7 +217,7 @@ class pLayer(torch.nn.Module):
 
 
 class PrintedSpikingNeuralNetwork(torch.nn.Module):
-    def __init__(self, topology, args):
+    def __init__(self, topology, args, model_class, ckpt_path):
         super().__init__()
         self.args = args
 
@@ -230,7 +225,7 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
 
         self.model = torch.nn.Sequential()
         for i in range(len(topology)-1):
-            self.model.add_module(str(i)+'_pLayer', pLayer(topology[i], topology[i+1], args, self.INV))
+            self.model.add_module(str(i)+'_pLayer', pLayer(topology[i], topology[i+1], args, self.INV,  model_class, ckpt_path))
 
     @property
     def DEVICE(self):
