@@ -6,3 +6,9 @@ surrogate/data/*
 surrogate/temp/*
 *.ckpt
 *.log
+lightning_logs/*
+pLSNN/*
+wandb/*
+surrogate/lightning_logs/*
+surrogate/pLSNN/*
+surrogate/wandb/*

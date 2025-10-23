@@ -32,6 +32,7 @@
               ipywidgets
               seaborn
               lightning
+              torchmetrics
 	      wandb
 
               # Self built
