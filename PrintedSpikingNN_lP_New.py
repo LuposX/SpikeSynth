@@ -1,5 +1,103 @@
 import torch
 import torch.nn as nn
+import pytorch_lightning as pl
+import torchmetrics
+from typing import Any
+from utils.evaluation import Evaluator
+
+# ===============================================================================
+# ======================== Lightning Wrapper for PSNN ===========================
+# ===============================================================================
+
+class LightningPrintedSpikingNetwork(pl.LightningModule):
+    def __init__(self, topology, args, model_class, ckpt_path, train_loader, valid_loader, test_loader, loss_fn=None):
+        super().__init__()
+        self.save_hyperparameters(ignore=['model_class', 'ckpt_path', 'loss_fn'])
+
+        self.args = args
+        self.network = PrintedSpikingNeuralNetwork(topology, args, model_class, ckpt_path)
+
+        # loss_fn expects (model, x, y) -> scalar (matches your LFLoss)
+        self.loss_fn = loss_fn if loss_fn is not None else LFLoss(args)
+
+        # evaluator returns (acc, power)
+        self.evaluator = Evaluator(args)
+
+        num_classes = topology[-1]
+        #self.train_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+        #self.val_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+
+        self.train_loader = train_loader
+        self.valid_loader = valid_loader
+        self.test_loader = test_loader
+
+    def forward(self, x):
+        return self.network(x)
+
+    def configure_optimizers(self):
+        lr = getattr(self.args, "LR", getattr(self.args, "lr", 1e-3))
+        params = self.network.GetParam()
+        #print(">>> optimizer param count:", sum(p.numel() for p in params))
+        #for p in params:
+        #    print("  p.requires_grad", p.requires_grad, "shape", p.shape)
+        optimizer = torch.optim.AdamW(params, lr=lr)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.args.EPOCH)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                factor=getattr(self.args, "LR_DECAY", 0.1),
+                patience=getattr(self.args, "LR_PATIENCE", 5),
+                min_lr=getattr(self.args, "LR_MIN", 1e-8))
+        return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
+
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch  # x: (B, C, T) ; y: (B,)
+        loss = self.loss_fn(self.network, x, y)
+
+        train_acc, train_power = self.evaluator(self.network, x, y)
+
+        # Log step-level metrics; aggregate on_epoch automatically
+        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train_acc", train_acc, on_step=False, on_epoch=True, prog_bar=True)
+        # network.power is updated in forward pass when necessary; we log epoch-wise
+        self.log("train_power", train_power, on_step=False, on_epoch=True, prog_bar=False)
+
+        return {"loss": loss}
+
+    def on_train_epoch_end(self):
+        opt = self.optimizers()
+        lr = opt.param_groups[0]["lr"]
+        self.log("lr", lr, prog_bar=True, on_step=False, on_epoch=True)
+    
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        loss = self.loss_fn(self.network, x, y)
+        valid_acc, valid_power = self.evaluator(self.network, x, y)
+
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_acc", valid_acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_power", valid_power, on_step=False, on_epoch=True, prog_bar=False)
+
+        return {"val_loss": loss}
+
+    
+    def UpdateArgs(self, args):
+        """Keep compatibility with the original code."""
+        self.args = args
+        self.network.UpdateArgs(args)
+
+    def on_save_checkpoint(self, checkpoint: dict) -> None:
+        checkpoint["custom_args"] = vars(self.args) if hasattr(self.args, "__dict__") else {}
+
+    def train_dataloader(self):
+        return self.train_loader
+
+    def val_dataloader(self):
+        return self.valid_loader
+
+    def test_dataloader(self):
+        return self.test_loader
 
 # ===============================================================================
 # ============================ Single Spike Generator ===========================
@@ -97,8 +195,8 @@ class Inv(torch.nn.Module):
 # ============================= Printed Layer ===================================
 # ===============================================================================
 
-class pLayer(torch.nn.Module, model_class, ckpt_path):
-    def __init__(self, n_in, n_out, args, INV):
+class pLayer(torch.nn.Module):
+    def __init__(self, n_in, n_out, args, INV, model_class, ckpt_path):
         super().__init__()
         self.args = args
         # define spike generators
