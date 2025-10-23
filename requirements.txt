@@ -1,1 +1,13 @@
+pandas
+requests
+numpy
+torch
+matplotlib
+jupyterlab
+polars
+tqdm
+ipywidgets
+seaborn
+lightning
+wandb
 snntorch
