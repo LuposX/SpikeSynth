@@ -3,18 +3,8 @@ from .checkpoint import *
 from .evaluation import *
 
 # if started from jupter use tqdm.notebook else use nromal tqdm
-try:
-    shell = get_ipython().__class__.__name__
-    if shell == 'ZMQInteractiveShell':
-        # Jupyter notebook or JupyterLab
-        from tqdm.notebook import tqdm
-    else:
-        # Terminal or other environments
-        from tqdm import tqdm
-except NameError:
-    # Standard Python interpreter
-    from tqdm import tqdm
-
+from tqdm.auto import tqdm
+import wandb
 
 def train_pnn(nn, train_loader, valid_loader, lossfunction, optimizer, args, logger, UUID='default'):
     start_training_time = time.time()
@@ -83,6 +73,18 @@ def train_pnn(nn, train_loader, valid_loader, lossfunction, optimizer, args, log
 
         L_valid = total_val_loss / total_val_samples
 
+        wandb.log({
+            "epoch": epoch,
+            "train_loss": L_train,
+            "train_acc": train_acc,
+            "train_power": train_power,
+            "val_loss": L_valid,
+            "val_acc": valid_acc,
+            "val_power": valid_power,
+            "lr": current_lr,
+            "patience": patience_lr,
+        })
+
         if args.recording:
             record_checkpoint(epoch, nn, L_train, L_valid, UUID, args.recordpath)
 
@@ -116,6 +118,7 @@ def train_pnn(nn, train_loader, valid_loader, lossfunction, optimizer, args, log
             msg = (f"| Epoch: {epoch:-6d} | Train loss: {L_train:.4e} | Valid loss: {L_valid:.4e} | "
                    f"Train acc: {train_acc:.4f} | Valid acc: {valid_acc:.4f} | patience: {patience:-3d} | "
                    f"Epoch time: {time.time() - start_epoch_time:.1f}s | Power: {train_power.item():.2e} |")
+            print(msg)
             logger.info(msg)
 
     _, resulted_nn, _, _ = load_checkpoint(UUID, args.temppath)
@@ -150,7 +153,7 @@ def train_pnn_progressive(nn, train_loader, valid_loader, lossfunction, optimize
     else:
         current_epoch = 0
 
-    # Outer tqdm for epochs
+    # Outer tqdm for epochs (auto backend avoids widget errors)
     epoch_bar = tqdm(range(current_epoch, 10**10), desc="Progressive Training", position=0)
 
     for epoch in epoch_bar:
@@ -162,12 +165,18 @@ def train_pnn_progressive(nn, train_loader, valid_loader, lossfunction, optimize
 
         # tqdm for training batches
         train_bar = tqdm(train_loader, desc=f"Epoch {epoch} [Train]", leave=False, position=1)
-        for x_train, y_train in train_bar:
+        for batch_idx, (x_train, y_train) in enumerate(train_bar):
             L_train_batch = lossfunction(nn, x_train, y_train)
             train_acc, train_power = evaluator(nn, x_train, y_train)
 
             optimizer.zero_grad()
             L_train_batch.backward()
+
+            if epoch % 5 == 0 and batch_idx == 0:  # log every few epochs to save time
+                for name, param in nn.named_parameters():
+                    if param.grad is not None:
+                        wandb.log({f"gradients/{name}": wandb.Histogram(param.grad.cpu().numpy())})
+
             optimizer.step()
 
             batch_size = x_train.size(0)
@@ -181,6 +190,7 @@ def train_pnn_progressive(nn, train_loader, valid_loader, lossfunction, optimize
                 "acc": f"{train_acc:.4f}",
                 "lr": f"{current_lr:.2e}"
             })
+        train_bar.close()
 
         L_train = total_train_loss / total_train_samples
         train_acc = total_train_acc / total_train_samples
@@ -207,10 +217,23 @@ def train_pnn_progressive(nn, train_loader, valid_loader, lossfunction, optimize
                     "loss": f"{L_val_batch.item():.4e}",
                     "acc": f"{valid_acc:.4f}"
                 })
+            val_bar.close()
 
         L_valid = total_val_loss / total_val_samples
         valid_acc = total_val_acc / total_val_samples
         valid_power = total_val_power / total_val_samples
+
+        wandb.log({
+            "epoch": epoch,
+            "train_loss": L_train,
+            "train_acc": train_acc,
+            "train_power": train_power,
+            "val_loss": L_valid,
+            "val_acc": valid_acc,
+            "val_power": valid_power,
+            "lr": current_lr,
+            "patience": patience_lr,
+        })
 
         # Logging and checkpointing
         if args.recording:
@@ -260,6 +283,7 @@ def train_pnn_progressive(nn, train_loader, valid_loader, lossfunction, optimize
             "Patience": patience_lr
         })
 
+
         # Reporting
         if not epoch % args.report_freq:
             msg = (f"| Epoch: {epoch:-6d} | Train loss: {L_train:.4e} | Valid loss: {L_valid:.4e} | "
@@ -271,7 +295,10 @@ def train_pnn_progressive(nn, train_loader, valid_loader, lossfunction, optimize
     # Load best model and clean up
     _, resulted_nn, _, _ = load_checkpoint(UUID, args.temppath)
     if early_stop:
-        os.remove(f'{args.temppath}/{UUID}.ckp')
+        try:
+            os.remove(f'{args.temppath}/{UUID}.ckp')
+        except OSError:
+            pass
 
     epoch_bar.close()
     return resulted_nn, early_stop

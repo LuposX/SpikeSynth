@@ -18,6 +18,7 @@ import wandb
 
 import os
 import wandb
+import inspect
 
 import torch
 import torch.nn as nn
@@ -42,18 +43,38 @@ if __name__ == "__main__":
     # Initialize wandb run
     wandb.init()
     config = wandb.config
-
-
-    # Create your model using hyperparameters from config
+    
+    def build_surrogate(surr_name, config):
+        """
+        Dynamically build a surrogate gradient callable from its name
+        and sweep config, without hardcoding parameters.
+        """
+        surr_fn = getattr(snn.surrogate, surr_name)  # get the function
+        # Inspect its arguments
+        sig = inspect.signature(surr_fn)
+        # Pick values from config that match the function arguments
+        kwargs = {k: getattr(config, k) for k in sig.parameters if hasattr(config, k)}
+        # Call the function with the matched parameters
+        return surr_fn(**kwargs)
+    
+    # Usage
+    spike_grad = build_surrogate(config.surrogate_gradient, config)
+    
+    # Pass to model
     model = SpikeSynth(
-        optimizer_class=getattr(torch.optim, wandb.config.optimizer_class),
+        optimizer_class=getattr(torch.optim, config.optimizer_class),
         beta=config.beta,
         lr=config.lr,
         num_hidden=config.num_hidden,
         batch_size=config.batch_size,
         gamma=config.gamma,
-        num_hidden_layers=config.num_hidden_layers
+        surrogate_gradient=spike_grad,
+        num_hidden_layers=config.num_hidden_layers,
+        train_dataset=train_dataset, 
+        valid_dataset=valid_dataset, 
+        max_epochs=config.epochs
     )
+
 
     # Use WandbLogger
     wandb_logger = WandbLogger(
