@@ -1,5 +1,13 @@
 import argparse
 
+# this is for manually loadign the args
+def load_args(overrides=None):
+    args = parser.parse_args([])  # load defaults
+    if overrides:
+        for k, v in overrides.items():
+            setattr(args, k, v)
+    return args
+
 parser = argparse.ArgumentParser(prog = 'Printed Spiking Neural Networks',
                                  description = 'Training for Printed Spiking Neural Networks')
 

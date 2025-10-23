@@ -7,13 +7,17 @@ import torch.nn as nn
 
 
 class SpikeSynth(L.LightningModule):
-    def __init__(self, num_hidden_layers, num_hidden, beta, optimizer_class, lr, batch_size, gamma):
+    def __init__(self, num_hidden_layers, num_hidden, beta, optimizer_class, lr, batch_size, gamma, surrogate_gradient, train_dataset, valid_dataset, max_epochs):
         super().__init__()
         self.num_params = 6
         self.num_inputs = 1
         self.num_outputs = self.num_inputs 
+        self.train_dataset = train_dataset
+        self.valid_dataset = valid_dataset
+        self.max_epochs = max_epochs
+        self.surrogate_gradient = surrogate_gradient
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["surrogate_gradient"])
 
         self.lif_layers = nn.ModuleList()
 
@@ -23,12 +27,14 @@ class SpikeSynth(L.LightningModule):
                 snn.LeakyParallel(
                     input_size=input_size,
                     hidden_size=self.hparams.num_hidden,
-                    beta=self.hparams.beta
+                    beta=self.hparams.beta,
+                    spike_grad=self.surrogate_gradient
                 )
             )
             # After first layer, input_size = hidden_size
             input_size = self.hparams.num_hidden
 
+        self.norm = nn.LayerNorm(self.hparams.num_hidden)
         self.output_layer = nn.Linear(self.hparams.num_hidden, self.num_outputs)
 
     def forward(self, x, params=None):
@@ -78,6 +84,8 @@ class SpikeSynth(L.LightningModule):
       # Swap back to batch-first
       x_seq_b = x_seq.permute(1, 0, 2)  # (batch, seq_len, hidden_size)
 
+      x_seq_b = self.norm(x_seq_b)
+
       out = self.output_layer(x_seq_b).squeeze()  # (batch, seq_len, num_outputs)
 
       return out
@@ -103,9 +111,10 @@ class SpikeSynth(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = self.hparams.optimizer_class(self.parameters(), lr=self.hparams.lr)
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            optimizer, gamma=self.hparams.gamma
-        )
+        #scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        #    optimizer, gamma=self.hparams.gamma
+        #)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.max_epochs)
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,
@@ -114,7 +123,7 @@ class SpikeSynth(L.LightningModule):
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
-            train_dataset,
+            self.train_dataset,
             batch_size=self.hparams.batch_size,
             shuffle=True,
             num_workers=8,
@@ -122,7 +131,7 @@ class SpikeSynth(L.LightningModule):
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(
-            valid_dataset,
+            self.valid_dataset,
             batch_size=self.hparams.batch_size,
             shuffle=False,
             num_workers=4,
