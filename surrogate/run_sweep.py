@@ -3,6 +3,9 @@ import os
 import subprocess
 import yaml
 
+# If a run is already running
+wandb.finish()
+
 # Path to your sweep config
 SWEEP_CONFIG_PATH = "sweep_rsnn.yaml"
 PROJECT_NAME = "test"

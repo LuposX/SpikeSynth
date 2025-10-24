@@ -19,8 +19,10 @@ class SpikeSynth(L.LightningModule):
 
         self.save_hyperparameters(ignore=["surrogate_gradient"])
 
+        self.norm = nn.LayerNorm(self.hparams.num_hidden)
+        
         self.lif_layers = nn.ModuleList()
-
+        
         input_size = self.num_inputs + self.num_params
         for _ in range(self.hparams.num_hidden_layers):
             self.lif_layers.append(
@@ -34,7 +36,6 @@ class SpikeSynth(L.LightningModule):
             # After first layer, input_size = hidden_size
             input_size = self.hparams.num_hidden
 
-        self.norm = nn.LayerNorm(self.hparams.num_hidden)
         self.output_layer = nn.Linear(self.hparams.num_hidden, self.num_outputs)
 
     def forward(self, x, params=None):
@@ -75,7 +76,10 @@ class SpikeSynth(L.LightningModule):
 
       # Concatenate static + time series
       x_transformed = torch.cat([static_repeated, time_series_features], dim=2)  # shape: (batch_size, time_steps, 7)
-      x_seq = x_transformed.permute(1, 0, 2)  # shape: (time_steps, batch_size, 7)
+
+      x_transformed_wNorm = self.norm(x_transformed)
+        
+      x_seq = x_transformed_wNorm.permute(1, 0, 2)  # shape: (time_steps, batch_size, 7)
 
       # Forward through all LIF layers
       for lif in self.lif_layers:
@@ -83,8 +87,6 @@ class SpikeSynth(L.LightningModule):
 
       # Swap back to batch-first
       x_seq_b = x_seq.permute(1, 0, 2)  # (batch, seq_len, hidden_size)
-
-      x_seq_b = self.norm(x_seq_b)
 
       out = self.output_layer(x_seq_b).squeeze()  # (batch, seq_len, num_outputs)
 
