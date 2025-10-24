@@ -43,19 +43,22 @@ if __name__ == "__main__":
     # Initialize wandb run
     wandb.init()
     config = wandb.config
-    
+
     def build_surrogate(surr_name, config):
-        """
-        Dynamically build a surrogate gradient callable from its name
-        and sweep config, without hardcoding parameters.
-        """
-        surr_fn = getattr(snn.surrogate, surr_name)  # get the function
-        # Inspect its arguments
+        """Dynamically build a surrogate gradient callable from its name and sweep config."""
+        surr_fn = getattr(snn.surrogate, surr_name)
         sig = inspect.signature(surr_fn)
-        # Pick values from config that match the function arguments
-        kwargs = {k: getattr(config, k) for k in sig.parameters if hasattr(config, k)}
-        # Call the function with the matched parameters
+    
+        # Match any config attributes that correspond to surrogate parameters (like slope)
+        kwargs = {
+            k: getattr(config, k)
+            for k in sig.parameters
+            if hasattr(config, k)
+        }
+    
+        print(f"Building surrogate {surr_name} with kwargs: {kwargs}")
         return surr_fn(**kwargs)
+
     
     # Usage
     spike_grad = build_surrogate(config.surrogate_gradient, config)
