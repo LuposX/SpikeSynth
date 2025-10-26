@@ -10,12 +10,12 @@ from utils.evaluation import Evaluator
 # ===============================================================================
 
 class LightningPrintedSpikingNetwork(pl.LightningModule):
-    def __init__(self, topology, args, model_class, ckpt_path, train_loader, valid_loader, test_loader, loss_fn=None):
+    def __init__(self, topology, args, model_class, ckpt_path, train_loader, valid_loader, test_loader, surrogate_gradient, loss_fn=None, train_dataset=None, valid_dataset=None):
         super().__init__()
         self.save_hyperparameters(ignore=['model_class', 'ckpt_path', 'loss_fn'])
 
         self.args = args
-        self.network = PrintedSpikingNeuralNetwork(topology, args, model_class, ckpt_path)
+        self.network = PrintedSpikingNeuralNetwork(topology, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset)
 
         # loss_fn expects (model, x, y) -> scalar (matches your LFLoss)
         self.loss_fn = loss_fn if loss_fn is not None else LFLoss(args)
@@ -105,12 +105,19 @@ class LightningPrintedSpikingNetwork(pl.LightningModule):
 
 
 class pSpikeGenerator(nn.Module):
-    def __init__(self, args, model_class, ckpt_path):
+    def __init__(self, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset):
         super().__init__()
         self.args = args
 
         # Load frozen spike generator
-        self.spike_generator = model_class.load_from_checkpoint(ckpt_path, map_location=self.DEVICE)
+        self.spike_generator = model_class.load_from_checkpoint(
+            ckpt_path,
+            map_location=self.DEVICE,
+            surrogate_gradient=surrogate_gradient,
+            train_dataset=train_dataset,
+            valid_dataset=valid_dataset,
+        )
+
         
         self.spike_generator.train(False)
         for param in self.spike_generator.parameters():
@@ -157,11 +164,11 @@ class pSpikeGenerator(nn.Module):
 # ===============================================================================
 
 class SGLayer(torch.nn.Module):
-    def __init__(self, N, args, model_class, ckpt_path):
+    def __init__(self, N, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset):
         super().__init__()
         self.args = args
         self.SG_Group = torch.nn.ModuleList(
-            [pSpikeGenerator(args, model_class, ckpt_path) for _ in range(N)])
+            [pSpikeGenerator(args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset) for _ in range(N)])
 
     @property
     def DEVICE(self):
@@ -196,11 +203,11 @@ class Inv(torch.nn.Module):
 # ===============================================================================
 
 class pLayer(torch.nn.Module):
-    def __init__(self, n_in, n_out, args, INV, model_class, ckpt_path):
+    def __init__(self, n_in, n_out, args, INV, model_class, ckpt_path,  surrogate_gradient, train_dataset, valid_dataset):
         super().__init__()
         self.args = args
         # define spike generators
-        self.SG = SGLayer(n_out, args, model_class, ckpt_path)
+        self.SG = SGLayer(n_out, args, model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset)
         # define nonlinear circuits
         self.INV = INV
         # initialize conductances for weights
@@ -315,7 +322,7 @@ class pLayer(torch.nn.Module):
 
 
 class PrintedSpikingNeuralNetwork(torch.nn.Module):
-    def __init__(self, topology, args, model_class, ckpt_path):
+    def __init__(self, topology, args, model_class, ckpt_path,  surrogate_gradient, train_dataset, valid_dataset):
         super().__init__()
         self.args = args
 
@@ -323,7 +330,7 @@ class PrintedSpikingNeuralNetwork(torch.nn.Module):
 
         self.model = torch.nn.Sequential()
         for i in range(len(topology)-1):
-            self.model.add_module(str(i)+'_pLayer', pLayer(topology[i], topology[i+1], args, self.INV,  model_class, ckpt_path))
+            self.model.add_module(str(i)+'_pLayer', pLayer(topology[i], topology[i+1], args, self.INV,  model_class, ckpt_path, surrogate_gradient, train_dataset, valid_dataset))
 
     @property
     def DEVICE(self):

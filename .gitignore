@@ -12,3 +12,4 @@ wandb/*
 surrogate/lightning_logs/*
 surrogate/pLSNN/*
 surrogate/wandb/*
+surrogate/.temp/*
