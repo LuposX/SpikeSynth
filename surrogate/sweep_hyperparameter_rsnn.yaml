@@ -27,5 +27,5 @@ parameters:
   layer_skip:
       values: [0, 1, 2, 4]
   epochs:
-    value: 2
-run_cap: 20
+    value: 25
+run_cap: 100
