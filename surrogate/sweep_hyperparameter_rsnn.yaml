@@ -23,7 +23,7 @@ parameters:
   num_hidden_layers:
       values: [1, 2, 4, 8]
   temporal_skip:
-      values: [1, 2, 4, None]
+      values: [1, 2, 4, -1]
   layer_skip:
       values: [0, 1, 2, 4]
   epochs:

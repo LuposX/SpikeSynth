@@ -57,14 +57,14 @@ class SpikeSynth(L.LightningModule):
                 Maximum number of training epochs. Used for scheduling when employing
                 cosine annealing or similar schedulers.
 
-            temporal_skip (int or None): 
+            temporal_skip (int or -1): 
                 Temporal skip interval in time steps for residual connections within
-                each LIF layer. If `None`, no temporal skip is applied.
+                each LIF layer. If `-1`, no temporal skip is applied.
 
-            layer_skip (int): 
+            layer_skip (int or 0): 
                 Number of layers to skip for inter-layer residual connections.
                 For example, `layer_skip=1` adds a connection from each layer
-                to the one immediately above it.
+                to the one immediately above it. If `0`, no layer skip is applied.
 
             train_dataset (torch.utils.data.Dataset, optional): 
                 Dataset used for training. Required by `train_dataloader()`.
@@ -107,7 +107,7 @@ class SpikeSynth(L.LightningModule):
             )
             
             # Temporal residual projection
-            if input_size != self.hparams.num_hidden:
+            if input_size != self.hparams.num_hidden and self.hparams.temporal_skip != -1:
                 self.residual_projs.append(nn.Linear(input_size, self.hparams.num_hidden))
             else:
                 self.residual_projs.append(nn.Identity())
@@ -164,7 +164,7 @@ class SpikeSynth(L.LightningModule):
             lif_out = lif(x_seq)
 
             # Temporal skip connection
-            if skip_k is None or skip_k >= T:
+            if skip_k == -1 or skip_k >= T:
                 x_seq = lif_out
             else:
                 prev = torch.zeros_like(x_seq)

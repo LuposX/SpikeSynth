@@ -27,7 +27,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 import snntorch as snn
 
-# Import your model - adjust import if RSNN is a package or module path differs
 from utils.RSNN import SpikeSynth
 
 
