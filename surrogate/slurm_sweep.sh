@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=sweep-rsnn
-#SBATCH --partition=dev_cpu
+#SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1     # 1 Task
 #SBATCH --cpus-per-task=20      # Each task gets 20 CPU
-#SBATCH --time=00:05:00
+#SBATCH --time=40:00:00
 #SBATCH --output=logs_slurm/sweep_%j.out
 #SBATCH --error=logs_slurm/sweep_%j.err
 
