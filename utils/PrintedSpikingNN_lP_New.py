@@ -3,7 +3,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 import torchmetrics
 from typing import Any
-from utils.evaluation import Evaluator
+from evaluation import Evaluator
 
 # ===============================================================================
 # ======================== Lightning Wrapper for PSNN ===========================
