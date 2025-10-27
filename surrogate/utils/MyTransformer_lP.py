@@ -1,7 +1,80 @@
+# lightning_model.py
 import math
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
+import torch.nn.functional as F
+import pytorch_lightning as pl
+
+class GPTLightning(pl.LightningModule):
+    """
+    PyTorch Lightning wrapper around your GPT model.
+    Expects inputs x with shape (B, T + n_extra, 1) and targets y
+    with shape (B, seq_len) or (B, seq_len, 1) depending on your dataset.
+    """
+
+    def __init__(self, model_config, max_epochs, lr=1e-3, weight_decay=0.0, loss_fn=None):
+        super().__init__()
+        # Save hyperparameters for checkpointing / config
+        self.save_hyperparameters(ignore=['model_config'])
+
+        # Build model
+        self.model = GPT(model_config)
+        # default to MSELoss if none provided (matches your training code)
+        self.loss_fn = loss_fn if loss_fn is not None else torch.nn.MSELoss()
+        self.lr = lr
+        self.weight_decay = weight_decay
+        self.max_epochs = max_epochs
+
+    def forward(self, x):
+        # delegate to wrapped model
+        return self.model(x)
+
+    def _compute_loss_and_preds(self, batch):
+        x, y = batch
+        preds = self(x)
+        # ensure preds and y shapes match for loss
+        # If y has shape (B, seq_len, 1), squeeze last dim.
+        if y.dim() == preds.dim() + 1 and y.size(-1) == 1:
+            y = y.squeeze(-1)
+        loss = self.loss_fn(preds, y)
+        return loss, preds, y
+
+    def training_step(self, batch, batch_idx):
+        loss, preds, y = self._compute_loss_and_preds(batch)
+        # log both step and epoch for convenience
+        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss, preds, y = self._compute_loss_and_preds(batch)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        loss, preds, y = self._compute_loss_and_preds(batch)
+        self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        return loss
+
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        x, _ = batch
+        return self(x)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
+        #scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        #    optimizer, gamma=self.hparams.gamma
+        #)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.max_epochs)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss",
+        }
+
+    def on_train_epoch_end(self):
+        opt = self.optimizers()
+        lr = opt.param_groups[0]["lr"]
+        self.log("lr", lr, prog_bar=True, on_step=False, on_epoch=True)
 
 
 class GELU(nn.Module):
@@ -236,4 +309,3 @@ class GPT(nn.Module):
         # Regression head (projects back to 1-dimensional output per token)
         outputs = self.regression_head(x).squeeze()
         return outputs[:, :seq_len]  # Return only the sequence-related outputs
-

@@ -22,6 +22,56 @@ class SpikeSynth(L.LightningModule):
                  train_dataset=None,
                  valid_dataset=None,
                  ):
+        """
+        Initializes the SpikeSynth model, a spiking neural network (SNN). 
+        The model supports temporal and layer-wise skip connections,
+        customizable surrogate gradients, and flexible optimizer/lr scheduling.
+
+        Args:
+            num_hidden_layers (int): 
+                Number of recurrent Leaky Integrate-and-Fire (LIF) layers in the network.
+
+            num_hidden (int): 
+                Number of hidden neurons (units) in each LIF layer.
+
+            beta (float): 
+                Membrane potential decay constant for the LIF neurons (typically 0 < beta < 1).
+
+            optimizer_class (type): 
+                Optimizer class to use (e.g., `torch.optim.Adam`, `torch.optim.SGD`).
+
+            lr (float): 
+                Inital Learning rate for the optimizer.
+
+            batch_size (int): 
+                Batch size used for both training and validation DataLoaders.
+
+            gamma (float): 
+                Decay factor for the learning rate scheduler (if used with ExponentialLR).
+
+            surrogate_gradient (torch.autograd.Function): 
+                Surrogate gradient function for backpropagation through spikes
+                (e.g., `snn.surrogate.atan()`).
+
+            max_epochs (int): 
+                Maximum number of training epochs. Used for scheduling when employing
+                cosine annealing or similar schedulers.
+
+            temporal_skip (int or None): 
+                Temporal skip interval in time steps for residual connections within
+                each LIF layer. If `None`, no temporal skip is applied.
+
+            layer_skip (int): 
+                Number of layers to skip for inter-layer residual connections.
+                For example, `layer_skip=1` adds a connection from each layer
+                to the one immediately above it.
+
+            train_dataset (torch.utils.data.Dataset, optional): 
+                Dataset used for training. Required by `train_dataloader()`.
+
+            valid_dataset (torch.utils.data.Dataset, optional): 
+                Dataset used for validation. Required by `val_dataloader()`.
+        """
         super().__init__()
         
         self.num_params = 6
