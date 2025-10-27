@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=20     # 20 CPU tasks
 #SBATCH --cpus-per-task=1        # Each task gets 1 CPU
-#SBATCH --time=32:00:00
+#SBATCH --time=00:05:00
 #SBATCH --output=logs/sweep_%j.out
 #SBATCH --error=logs/sweep_%j.err
 
@@ -20,7 +20,7 @@ pip install -r requirements.txt
 
 # Run the sweep with unbuffered output for real-time logging
 python -u 3_hyperparameter_search_rsnn.py \
-    --sweep-config sweep_rsnn.yaml \
+    --sweep-config sweep_hyperparameter_rsnn.yaml \
     --project SpikeSynth-Surrogate-Sweep \
     --logging-directory /scratch/$USER/wandb_logs
 
