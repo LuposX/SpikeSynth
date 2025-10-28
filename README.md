@@ -1,4 +1,4 @@
-# 🧠 SpikeSynth: Energy-Efficient Adaptive Analog Printed Spiking Neural Networks
+# 🧠 Flex-Spike: Analysis of flexible analog spiking neural network architecture for neuromorphic learning
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
@@ -42,7 +42,7 @@ Place your **SPIKE data** for the circuit you want to simulate into the `data` d
 
 1. Use the notebook `1_create_surrogate_dataset.ipynb` to generate the dataset for training the surrogate model.
    The resulting dataset will be saved as `data/dataset.ds`.
-2. Use `2_create_gpt_surrogate.ipynb` to train the baseline GPT surrogate model, or `2_create_rsnn_surrogate.ipynb` to train the RSNN surrogate model.
+2. Use `2_tain_gpt_surrogate.py` to train the baseline GPT surrogate model, or `2_train_rsnn_surrogate.py` to train the RSNN surrogate model.
    Logging requires a **Weights & Biases (wandb)** account.
 3. To perform hyperparameter optimization, run:
 
@@ -96,11 +96,7 @@ Experimental data for this project can be found [here](https://1drv.ms/f/c/a3128
 
 ## 🤝 Credits
 
-
-This repository accompanies the ICCAD 2025 paper
-**SpikeSynth: Energy-Efficient Adaptive Analog Printed Spiking Neural Networks**.
-
-The data can be found [here](https://1drv.ms/f/c/a31285484594c370/ErPw8IcCU5tCl2CpgQnXkj8BY41yb5YgZAaSnQjNQNRNEw?e=On30Sp).
+This repository is based on the the ICCAD 2025 paper and its github Repo **SpikeSynth: Energy-Efficient Adaptive Analog Printed Spiking Neural Networks**.
 
 **Reference**
 [1] Pal, P.; Zhao, H.; Shatta, M.; Hefenbrock, M.; Mamaghani, S. B.; Nassif, S.; Beigl, M.; Tahoori, M. B.
