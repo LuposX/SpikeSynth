@@ -7,6 +7,7 @@ parameters:
     values: [0.0005, 0.001, 0.005, 0.01]
   num_hidden:
     values: [2, 4, 8, 32, 64, 128]
+  # Defines the Decay of the LIF Neurons
   beta:
     values: [0.85, 0.9, 0.95]
   surrogate_gradient:
@@ -16,8 +17,9 @@ parameters:
       values: [2, 4, 8, 16]
   batch_size:
     value: 2048
+  # The Decay rate when using Exponential LR Scheduler, currently not in use.
   gamma:
-    values: [0.9, 0.95, 0.99]
+    value: 1
   optimizer_class:
     value: "AdamW"
   num_hidden_layers:
