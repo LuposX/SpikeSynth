@@ -18,6 +18,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.utilities.model_summary import ModelSummary
 
 # adjust this import to match your package layout
 from utils.MyTransformer_lP import GPTLightning, GPT
@@ -87,6 +88,11 @@ def main(args):
     os.makedirs(logging_directory, exist_ok=True)
     os.environ["WANDB_DIR"] = logging_directory
 
+    summary = ModelSummary(model, max_depth=1)
+    num_params = summary.total_parameters
+    trainable_params = summary.trainable_parameters
+    logger.info("Model has %d trainable parameters (total %d)", trainable_params, num_params)
+
     # WandB logger
     wandb_logger = None
     if not args.no_wandb:
@@ -97,6 +103,11 @@ def main(args):
             name=args.experiment_name,
             save_dir=logging_directory,
         )
+        try:
+            wandb_logger.experiment.summary["trainable_parameters"] = trainable_params
+            wandb_logger.experiment.summary["total_parameters"] = num_params
+        except Exception as e:
+            logger.warning("wandb_logger.experiment.summary() failed: %s", e)
         # log gradients and model topology (safe-guard)
         try:
             wandb_logger.watch(model)
@@ -115,7 +126,7 @@ def main(args):
         monitor=args.monitor,
         mode=args.monitor_mode,
         save_top_k=args.save_top_k,
-        filename=f"{args.experiment_name}gpt_model-{{epoch:02d}}-{{{args.monitor}:.2f}}",
+        filename=f"{args.experiment_name}-{{epoch:02d}}-{{{args.monitor}:.2f}}",
         save_last=True,
         dirpath=args.checkpoint_dir if args.checkpoint_dir else None,
     )
@@ -134,6 +145,7 @@ def main(args):
         log_every_n_steps=args.log_every_n_steps,
         default_root_dir=logging_directory,
     )
+
 
     # Optionally compile model (commented by default)
     if args.torch_compile:
@@ -173,13 +185,13 @@ if __name__ == "__main__":
     parser.add_argument("--pin-memory", type=str2bool, default=False, help="Whether to use pin_memory in DataLoader (true/false).")
 
     # Logging / wandb
-    parser.add_argument("--experiment-name", type=str, default="GPT_pico", help="WandB experiment/run name.")
+    parser.add_argument("--experiment-name", type=str, default=None, help="WandB experiment/run name.")
     parser.add_argument("--project-name", type=str, default="Spike-Synth-Surrogate", help="WandB project name.")
     parser.add_argument("--logging-directory", type=str, default=".temp", help="Local directory where logs/wandb files are stored.")
     parser.add_argument("--no-wandb", action="store_true", help="Disable WandB logging (useful for local quick debugging).")
 
     # Checkpointing and callbacks
-    parser.add_argument("--checkpoint-dir", type=str, default="models/SRNN", help="Directory to save checkpoints (ModelCheckpoint.dirpath).")
+    parser.add_argument("--checkpoint-dir", type=str, default="models/GPT", help="Directory to save checkpoints (ModelCheckpoint.dirpath).")
     parser.add_argument("--monitor", type=str, default="val_loss", help="Metric to monitor for checkpointing/early stopping.")
     parser.add_argument("--monitor-mode", dest="monitor_mode", choices=["min", "max"], default="min", help="Monitor mode for checkpointing/early stopping.")
     parser.add_argument("--save-top-k", type=int, default=1, help="How many top checkpoints to keep.")
@@ -197,5 +209,8 @@ if __name__ == "__main__":
     parser.add_argument("--test-after-training", dest="test_after_training", action="store_true", help="Run trainer.test() after training.")
 
     args = parser.parse_args()
+
+    if args.experiment_name is None:
+        args.experiment_name = args.model_type
 
     main(args)

@@ -20,6 +20,7 @@ import snntorch as snn
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer
+from pytorch_lightning.utilities.model_summary import ModelSummary
 
 from utils.RSNN import SpikeSynth
 
@@ -78,21 +79,33 @@ def main(args):
         lr=args.lr,
         num_hidden=args.num_hidden,
         batch_size=args.batch_size,
-        gamma=args.gamma,
         num_hidden_layers=args.num_hidden_layers,
+        dropout=args.dropout,
         train_dataset=train_dataset,
         valid_dataset=valid_dataset,
         max_epochs=args.max_epochs,
         surrogate_gradient=surrogate,
         temporal_skip=args.temporal_skip,
         layer_skip=args.layer_skip,
+        use_bntt=args.use_bntt,
+        bntt_time_steps=args.bntt_time_steps,
     )
+
+    summary = ModelSummary(model, max_depth=1)
+    num_params = summary.total_parameters
+    trainable_params = summary.trainable_parameters
+    logger.info("Model has %d trainable parameters (total %d)", trainable_params, num_params)
 
     # WandB logger
     wandb_logger = None
     if not args.no_wandb:
         logger.info("Initializing WandbLogger (project=%s name=%s) at %s", args.project_name, args.experiment_name, logging_directory)
         wandb_logger = WandbLogger(log_model=True, project=args.project_name, name=args.experiment_name, save_dir=logging_directory)
+        try:
+            wandb_logger.experiment.summary["trainable_parameters"] = trainable_params
+            wandb_logger.experiment.summary["total_parameters"] = num_params
+        except Exception as e:
+            logger.warning("wandb_logger.experiment.summary() failed: %s", e)
         try:
             wandb_logger.watch(model)
         except Exception as e:
@@ -169,13 +182,14 @@ if __name__ == "__main__":
     parser.add_argument("--num-hidden", type=int, default=256, help="Number of hidden units.")
     parser.add_argument("--num-hidden-layers", type=int, default=4, help="Number of hidden layers.")
     parser.add_argument("--beta", type=float, default=0.9, help="Beta (optimizer momentum-like).")
-    parser.add_argument("--gamma", type=float, default=0.9, help="Gamma (scheduler parameter).")
     parser.add_argument("--temporal-skip", type=int, default=-1, help="Temporal skip value (or None).")
     parser.add_argument("--layer-skip", type=int, default=2, help="Layer skip value.")
     parser.add_argument("--surrogate", type=str, default="atan", help="Surrogate gradient to use (e.g. 'atan').")
+    parser.add_argument("--dropout", type=float, default=0, help="Introduces a dropout layer for each LIF layer.")
     parser.add_argument("--torch-compile", action="store_true", help="Attempt torch.compile(model) before training.")
     parser.add_argument("--use-gpu-if-available", action="store_true", help="Use GPU if available (default: off).")
-
+    parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whetehr to use Batchnorm or not.")
+    parser.add_argument("--bntt-time-steps", type=int, default=100, help="Batchnorm needs to know the sequence length beforehand.")
     parser.add_argument("--log-every-n-steps", type=int, default=10, help="Logging frequency (trainer.log_every_n_steps)")
 
     args = parser.parse_args()
