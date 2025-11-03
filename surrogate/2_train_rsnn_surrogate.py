@@ -38,6 +38,17 @@ def str2bool(v):
     raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
+def get_optimizer_class(name):
+    optimizer_map = {
+        "adam": torch.optim.Adam,
+        "adamw": torch.optim.AdamW,
+        "sgd": torch.optim.SGD,
+        "rmsprop": torch.optim.RMSprop,
+        "adagrad": torch.optim.Adagrad,
+    }
+    return optimizer_map.get(name.lower(), torch.optim.AdamW)  # default fallback
+
+
 def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
     scheduler_map = {
         "none": None,
@@ -103,10 +114,12 @@ def main(args):
         surrogate = snn.surrogate.atan()
 
     scheduler_class, scheduler_kwargs = parse_scheduler_args(args.scheduler_class, args.scheduler_kwargs)
+    optimizer_class = get_optimizer_class(args.optimizer_class)
+
     
     # Instantiate model
     model = SpikeSynth(
-        optimizer_class=torch.optim.AdamW,
+        optimizer_class=optimizer_class,
         beta=args.beta,
         lr=args.lr,
         num_hidden=args.num_hidden,
@@ -209,7 +222,7 @@ if __name__ == "__main__":
     parser.add_argument("--monitor", type=str, default="val_loss", help="Metric to monitor for checkpointing.")
     parser.add_argument("--monitor-mode", dest="monitor_mode", choices=["min", "max"], default="min", help="Monitor mode for checkpointing/early stopping.")
     parser.add_argument("--no-wandb", action="store_true", help="Disable WandB logging.")
-     parser.add_argument("--log-every-n-steps", type=int, default=10, help="Logging frequency (trainer.log_every_n_steps)")
+    parser.add_argument("--log-every-n-steps", type=int, default=10, help="Logging frequency (trainer.log_every_n_steps)")
 
     # Model/training hyperparameters
     parser.add_argument("--lr", type=float, default=0.005, help="Learning rate.")
@@ -223,13 +236,16 @@ if __name__ == "__main__":
     parser.add_argument("--dropout", type=float, default=0, help="Introduces a dropout layer for each LIF layer.")
     parser.add_argument("--torch-compile", action="store_true", help="Attempt torch.compile(model) before training.")
     parser.add_argument("--use-gpu-if-available", action="store_true", help="Use GPU if available (default: off).")
-    parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whetehr to use Batchnorm or not.")
+    parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whether to use Batchnorm or not.")
     parser.add_argument("--bntt-time-steps", type=int, default=100, help="Batchnorm needs to know the sequence length beforehand.")
+
     parser.add_argument("--scheduler-class", type=str, default="cosine", choices=["none", "cosine", "exponential", "step", "plateau"], help="Learning rate scheduler type. Options: none, cosine, exponential, step, plateau.")
     parser.add_argument("--scheduler-kwargs", type=str, default="", help=(
         "Extra scheduler arguments as key=value pairs separated by commas, e.g. "
         "'gamma=0.95,T_max=50,step_size=10'. Ignored if scheduler=none."
     ),)
+    parser.add_argument("--optimizer-class",type=str,default="AdamW",choices=["Adam", "AdamW", "SGD", "RMSprop", "Adagrad"],help="Optimizer to use. Options: Adam, AdamW, SGD, RMSprop, Adagrad.")
+
 
 
     args = parser.parse_args()

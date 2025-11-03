@@ -255,6 +255,10 @@ class SpikeSynth(L.LightningModule):
             # Add default T_max if scheduler is cosine and not provided
             if self.hparams.scheduler_class == torch.optim.lr_scheduler.CosineAnnealingLR:
                 self.hparams.scheduler_kwargs.setdefault("T_max", self.hparams.max_epochs)
+            if self.hparams.scheduler_class == torch.optim.lr_scheduler.ExponentialLR:
+                  self.hparams.scheduler_kwargs.setdefault("gamma", 0.95)
+            if self.hparams.scheduler_class == torch.optim.lr_scheduler.StepLR:
+                  self.hparams.scheduler_kwargs.setdefault("step_size", 5)
             scheduler = self.hparams.scheduler_class(optimizer, **self.hparams.scheduler_kwargs)
 
             return {
