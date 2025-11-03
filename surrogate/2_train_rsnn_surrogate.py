@@ -38,6 +38,36 @@ def str2bool(v):
     raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
+def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
+    scheduler_map = {
+        "none": None,
+        "cosine": torch.optim.lr_scheduler.CosineAnnealingLR,
+        "exponential": torch.optim.lr_scheduler.ExponentialLR,
+        "step": torch.optim.lr_scheduler.StepLR,
+        "plateau": torch.optim.lr_scheduler.ReduceLROnPlateau,
+    }
+
+    scheduler_class = scheduler_map.get(scheduler_name.lower(), None)
+
+    # Parse kwargs string into dict
+    kwargs = {}
+    if scheduler_kwargs_str:
+        for kv in scheduler_kwargs_str.split(","):
+            if "=" in kv:
+                key, value = kv.split("=")
+                # try to cast to int or float when possible
+                try:
+                    if "." in value:
+                        value = float(value)
+                    else:
+                        value = int(value)
+                except ValueError:
+                    pass
+                kwargs[key.strip()] = value
+
+    return scheduler_class, kwargs
+
+
 def main(args):
     logger.info("Loading dataset from %s", args.data)
     data = torch.load(args.data)
@@ -72,6 +102,8 @@ def main(args):
         logger.warning("Unknown surrogate '%s', falling back to atan()", args.surrogate)
         surrogate = snn.surrogate.atan()
 
+    scheduler_class, scheduler_kwargs = parse_scheduler_args(args.scheduler_class, args.scheduler_kwargs)
+    
     # Instantiate model
     model = SpikeSynth(
         optimizer_class=torch.optim.AdamW,
@@ -89,6 +121,8 @@ def main(args):
         layer_skip=args.layer_skip,
         use_bntt=args.use_bntt,
         bntt_time_steps=args.bntt_time_steps,
+        scheduler_class=scheduler_class,
+        scheduler_kwargs=scheduler_kwargs
     )
 
     summary = ModelSummary(model, max_depth=1)
@@ -175,6 +209,7 @@ if __name__ == "__main__":
     parser.add_argument("--monitor", type=str, default="val_loss", help="Metric to monitor for checkpointing.")
     parser.add_argument("--monitor-mode", dest="monitor_mode", choices=["min", "max"], default="min", help="Monitor mode for checkpointing/early stopping.")
     parser.add_argument("--no-wandb", action="store_true", help="Disable WandB logging.")
+     parser.add_argument("--log-every-n-steps", type=int, default=10, help="Logging frequency (trainer.log_every_n_steps)")
 
     # Model/training hyperparameters
     parser.add_argument("--lr", type=float, default=0.005, help="Learning rate.")
@@ -190,7 +225,12 @@ if __name__ == "__main__":
     parser.add_argument("--use-gpu-if-available", action="store_true", help="Use GPU if available (default: off).")
     parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whetehr to use Batchnorm or not.")
     parser.add_argument("--bntt-time-steps", type=int, default=100, help="Batchnorm needs to know the sequence length beforehand.")
-    parser.add_argument("--log-every-n-steps", type=int, default=10, help="Logging frequency (trainer.log_every_n_steps)")
+    parser.add_argument("--scheduler-class", type=str, default="cosine", choices=["none", "cosine", "exponential", "step", "plateau"], help="Learning rate scheduler type. Options: none, cosine, exponential, step, plateau.")
+    parser.add_argument("--scheduler-kwargs", type=str, default="", help=(
+        "Extra scheduler arguments as key=value pairs separated by commas, e.g. "
+        "'gamma=0.95,T_max=50,step_size=10'. Ignored if scheduler=none."
+    ),)
+
 
     args = parser.parse_args()
 

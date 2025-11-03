@@ -47,6 +47,37 @@ def build_surrogate(surr_name, config):
     return surr_fn(**kwargs)
 
 
+def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
+    scheduler_map = {
+        "none": None,
+        "cosine": torch.optim.lr_scheduler.CosineAnnealingLR,
+        "exponential": torch.optim.lr_scheduler.ExponentialLR,
+        "step": torch.optim.lr_scheduler.StepLR,
+        "plateau": torch.optim.lr_scheduler.ReduceLROnPlateau,
+    }
+
+    scheduler_class = scheduler_map.get(scheduler_name.lower(), None)
+
+    # Parse kwargs string into dict
+    kwargs = {}
+    if scheduler_kwargs_str:
+        for kv in scheduler_kwargs_str.split(","):
+            if "=" in kv:
+                key, value = kv.split("=")
+                # try to cast to int or float when possible
+                try:
+                    if "." in value:
+                        value = float(value)
+                    else:
+                        value = int(value)
+                except ValueError:
+                    pass
+                kwargs[key.strip()] = value
+
+    return scheduler_class, kwargs
+
+
+
 def training_run():
     """
     The function to be passed to wandb.agent. It will be called repeatedly by wandb.agent.
@@ -74,6 +105,8 @@ def training_run():
         # Build surrogate gradient
         spike_grad = build_surrogate(config.surrogate_gradient, config)
 
+        scheduler_class, scheduler_kwargs = parse_scheduler_args(config.scheduler_class, config.scheduler_kwargs)
+
         # Build model instance (mirror your original kwargs)
         model = SpikeSynth(
             optimizer_class=getattr(torch.optim, config.optimizer_class),
@@ -90,7 +123,9 @@ def training_run():
             valid_dataset=valid_dataset,
             max_epochs=config.epochs,
             temporal_skip=config.temporal_skip,
-            layer_skip=config.layer_skip
+            layer_skip=config.layer_skip,
+            scheduler_class=scheduler_class,
+            scheduler_kwargs=scheduler_kwargs
         )
 
         # Setup WandbLogger for PyTorch Lightning

@@ -156,7 +156,7 @@ class Block(nn.Module):
             act=GELU(),
             dropout=nn.Dropout(config.resid_pdrop),
         ))
-    
+
     def mlp_forward(self, x):
         m = self.mlp
         x = m.c_fc(x)
@@ -234,10 +234,10 @@ class GPT(nn.Module):
                 'gpt-mini': dict(n_layer=6, n_head=6, n_embd=192),
                 'gpt-micro': dict(n_layer=4, n_head=4, n_embd=128),
                 'gpt-nano': dict(n_layer=3, n_head=3, n_embd=48),
-                'pico-test': dict(n_layer=2, n_head=2, n_embd=24),
-                'femto-test': dict(n_layer=1, n_head=1, n_embd=12),
+                'gpt-pico': dict(n_layer=2, n_head=2, n_embd=24),
+                'gpt-femto': dict(n_layer=1, n_head=1, n_embd=12),
             }[config.model_type])
-        
+
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Linear(1, config.n_embd),  # Token embedding for sequence and extra parameters
             wpe=nn.Embedding(config.block_size, config.n_embd),  # Positional embedding only for sequence
@@ -273,7 +273,7 @@ class GPT(nn.Module):
         device = x.device
         extra_params = self.n_extra_params  # Retrieve extra parameter count
         b, t, c = x.size()  # (B, T + N_extra, 1)
-        
+
         assert t > extra_params, "Total sequence length must be greater than the number of extra parameters"
 
         # Split input into sequence and extra parameters

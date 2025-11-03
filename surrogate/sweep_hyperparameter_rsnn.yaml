@@ -1,4 +1,4 @@
-method: bayes
+method: grid
 metric:
   name: val_loss
   goal: minimize
@@ -6,23 +6,23 @@ parameters:
   lr:
     value: 0.005
   num_hidden:
-    values: [8, 32, 64, 128, 256]
+    value: 256
   # Defines the Decay of the LIF Neurons
   beta:
-    values: [0.1, 0.3, 0.5, 0.8]
+    value: 0.8
   surrogate_gradient:
       value: "atan"
-  # Slope of the surrogate gradient function 
+  # Slope of the surrogate gradient function
   alpha:
-      values: [2, 4, 8, 16]
+      value: 4
   dropout:
-      values: [0, 0.1, 0.3, 0.5]
+      value: 0.1
   batch_size:
     value: 2048
   optimizer_class:
     value: "AdamW"
   num_hidden_layers:
-      values: [1, 2, 4, 8]
+      value: 4
   temporal_skip:
       value: -1
   use_bntt:
@@ -32,5 +32,9 @@ parameters:
   layer_skip:
       value: 0
   epochs:
-    value: 40
-run_cap: 80
+    value: 10
+  scheduler_class:
+    values: ["cosine", "exponential", "step", "plateau"]
+  scheduler_kwargs:
+    value: ""
+run_cap: 4

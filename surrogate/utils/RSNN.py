@@ -22,6 +22,8 @@ class SpikeSynth(L.LightningModule):
                  temporal_skip,
                  layer_skip,
                  use_bntt,
+                 scheduler_class,
+                 scheduler_kwargs=None, 
                  bntt_time_steps=None,
                  train_dataset=None,
                  valid_dataset=None,
@@ -82,6 +84,9 @@ class SpikeSynth(L.LightningModule):
 
             valid_dataset (torch.utils.data.Dataset, optional): 
                 Dataset used for validation. Required by `val_dataloader()`.
+
+            scheduler_class (torch.optim.lr_scheduler):
+                What Learning Rate Scheduler should be used for training.
         """
         super().__init__()
         
@@ -244,16 +249,21 @@ class SpikeSynth(L.LightningModule):
         self.log("lr", lr, prog_bar=True, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
-        optimizer = self.hparams.optimizer_class(self.parameters(), lr=self.hparams.lr)
-        #scheduler = torch.optim.lr_scheduler.ExponentialLR(
-        #    optimizer, gamma=self.hparams.gamma
-        #)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.max_epochs)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": scheduler,
-            "monitor": "val_loss",
-        }
+         optimizer = self.hparams.optimizer_class(self.parameters(), lr=self.hparams.lr)
+
+         if self.hparams.scheduler_class is not None:
+            # Add default T_max if scheduler is cosine and not provided
+            if self.hparams.scheduler_class == torch.optim.lr_scheduler.CosineAnnealingLR:
+                self.hparams.scheduler_kwargs.setdefault("T_max", self.hparams.max_epochs)
+            scheduler = self.hparams.scheduler_class(optimizer, **self.hparams.scheduler_kwargs)
+
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": scheduler,
+                "monitor": "val_loss",
+            }
+         else:
+            return optimizer
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
