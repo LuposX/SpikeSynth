@@ -23,6 +23,7 @@ class SpikeSynth(L.LightningModule):
                  layer_skip,
                  use_bntt,
                  scheduler_class,
+                 log_every_n_steps,
                  scheduler_kwargs=None, 
                  bntt_time_steps=None,
                  train_dataset=None,
@@ -87,6 +88,9 @@ class SpikeSynth(L.LightningModule):
 
             scheduler_class (torch.optim.lr_scheduler):
                 What Learning Rate Scheduler should be used for training.
+
+            log_every_n_steps (int):
+                Log every n steps.
         """
         super().__init__()
         
@@ -220,21 +224,42 @@ class SpikeSynth(L.LightningModule):
         out = self.output_layer(x_seq_b).squeeze()
         return out
 
-
-
     def training_step(self, batch, batch_idx):
         X_batch, y_batch = batch
         outputs = self(X_batch)
         loss = torch.nn.MSELoss()(outputs, y_batch.float())
         self.log("train_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
-
+    
+        # Log spike activity
         spike_logs = {
             f"spikes/train_avg_layer_{i}": avg_spikes
             for i, avg_spikes in enumerate(self.spike_counts)
         }
         self.log_dict(spike_logs, on_step=False, on_epoch=True, sync_dist=True)
+    
+        # ---- Gradient tracking every N steps ----
+        if batch_idx % self.hparams.log_every_n_steps == 0 and batch_idx > 0:
+            grad_means = {}
+            for name, param in self.named_parameters():
+                if param.grad is not None:
+                    parts = name.split('.')
+                    # Group by top-level module, include index for ModuleLists like lif_layers
+                    if parts[0] == "lif_layers" and len(parts) > 1:
+                        layer_name = ".".join(parts[:2])  # e.g., lif_layers.0
+                    else:
+                        layer_name = parts[0]  # e.g., norm, output_layer
+                    grad_means.setdefault(layer_name, []).append(param.grad.abs().mean().item())
         
+            grad_means = {
+                f"grad_mean/{layer}": sum(vals) / len(vals)
+                for layer, vals in grad_means.items()
+            }
+        
+            self.log_dict(grad_means, on_step=True, on_epoch=False, sync_dist=False)
+        # -----------------------------------------
+    
         return loss
+
 
     def validation_step(self, batch, batch_idx):
         X_batch, y_batch = batch

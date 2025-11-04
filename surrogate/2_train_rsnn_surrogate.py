@@ -134,6 +134,7 @@ def main(args):
         layer_skip=args.layer_skip,
         use_bntt=args.use_bntt,
         bntt_time_steps=args.bntt_time_steps,
+        log_every_n_steps=args.log_every_n_steps,
         scheduler_class=scheduler_class,
         scheduler_kwargs=scheduler_kwargs
     )
@@ -153,10 +154,6 @@ def main(args):
             wandb_logger.experiment.summary["total_parameters"] = num_params
         except Exception as e:
             logger.warning("wandb_logger.experiment.summary() failed: %s", e)
-        try:
-            wandb_logger.watch(model)
-        except Exception as e:
-            logger.warning("wandb_logger.watch() failed: %s", e)
         try:
             wandb_logger.experiment.log_code(".", include_fn=lambda path: path.endswith(".py") or path.endswith(".ipynb"))
         except Exception as e:

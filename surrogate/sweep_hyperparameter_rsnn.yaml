@@ -1,4 +1,4 @@
-method: grid
+method: random
 metric:
   name: val_loss
   goal: minimize
@@ -6,23 +6,23 @@ parameters:
   lr:
     value: 0.005
   num_hidden:
-    value: 256
+    value: [2, 4, 8, 16, 32, 64]
   # Defines the Decay of the LIF Neurons
   beta:
-    value: 0.8
+    value: [0.3, 0.5, 0.8]
   surrogate_gradient:
       value: "atan"
   # Slope of the surrogate gradient function
   alpha:
-      value: 4
+      value: [2, 4, 8, 16]
   dropout:
-      value: 0.1
+      value: 0
   batch_size:
     value: 2048
   optimizer_class:
     value: "AdamW"
   num_hidden_layers:
-      value: 4
+      value: [1, 2, 4, 8, 16]
   temporal_skip:
       value: -1
   use_bntt:
@@ -31,10 +31,10 @@ parameters:
       value: 100
   layer_skip:
       value: 0
-  epochs:
-    value: 10
   scheduler_class:
-    values: ["cosine", "exponential", "step", "plateau"]
+    value: "cosine" # ["cosine", "exponential", "step", "plateau"]
   scheduler_kwargs:
     value: ""
-run_cap: 4
+  epochs:
+    value: 25
+run_cap: 50
