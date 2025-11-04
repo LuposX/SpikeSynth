@@ -14,6 +14,7 @@ class SpikeSynth(L.LightningModule):
                  num_hidden,
                  beta,
                  optimizer_class,
+                 optimizer_kwargs,
                  lr,
                  batch_size,
                  dropout,
@@ -47,6 +48,9 @@ class SpikeSynth(L.LightningModule):
 
             optimizer_class (type): 
                 Optimizer class to use (e.g., `torch.optim.Adam`, `torch.optim.SGD`).
+
+            optimizer_kwargs(dict):
+                The paramaters of the optimizer.
 
             lr (float): 
                 Inital Learning rate for the optimizer.
@@ -293,7 +297,10 @@ class SpikeSynth(L.LightningModule):
         self.log("lr", lr, prog_bar=True, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
-         optimizer = self.hparams.optimizer_class(self.parameters(), lr=self.hparams.lr)
+         optimizer_kwargs = dict(self.hparams.optimizer_kwargs or {})
+         optimizer_kwargs.setdefault("lr", self.hparams.lr)
+        
+         optimizer = self.hparams.optimizer_class(self.parameters(), **optimizer_kwargs)
 
          if self.hparams.scheduler_class is not None:
             # Add default T_max if scheduler is cosine and not provided

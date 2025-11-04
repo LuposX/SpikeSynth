@@ -49,6 +49,33 @@ def get_optimizer_class(name):
     return optimizer_map.get(name.lower(), torch.optim.AdamW)  # default fallback
 
 
+def parse_optimizer_kwargs(kwargs_str):
+    """Parse comma-separated key=value pairs into a dict."""
+    kwargs = {}
+    if not kwargs_str:
+        return kwargs
+    for kv in kwargs_str.split(","):
+        if "=" not in kv:
+            continue
+        key, value = kv.split("=", 1)
+        value = value.strip()
+        # Try to safely evaluate tuples, floats, ints, bools
+        try:
+            evaluated = eval(value, {"__builtins__": {}})  # allow tuples, lists
+            value = evaluated
+        except Exception:
+            try:
+                if "." in value:
+                    value = float(value)
+                else:
+                    value = int(value)
+            except ValueError:
+                if value.lower() in ["true", "false"]:
+                    value = value.lower() == "true"
+        kwargs[key.strip()] = value
+    return kwargs
+
+
 def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
     scheduler_map = {
         "none": None,
@@ -114,12 +141,14 @@ def main(args):
         surrogate = snn.surrogate.atan()
 
     scheduler_class, scheduler_kwargs = parse_scheduler_args(args.scheduler_class, args.scheduler_kwargs)
+    
     optimizer_class = get_optimizer_class(args.optimizer_class)
-
+    optimizer_kwargs = parse_optimizer_kwargs(args.optimizer_kwargs)
     
     # Instantiate model
     model = SpikeSynth(
         optimizer_class=optimizer_class,
+        optimizer_kwargs=optimizer_kwargs,
         beta=args.beta,
         lr=args.lr,
         num_hidden=args.num_hidden,
@@ -246,6 +275,8 @@ if __name__ == "__main__":
         "'gamma=0.95,T_max=50,step_size=10'. Ignored if scheduler=none."
     ),)
     parser.add_argument("--optimizer-class",type=str,default="AdamW",choices=["Adam", "AdamW", "SGD", "RMSprop", "Adagrad"],help="Optimizer to use. Options: Adam, AdamW, SGD, RMSprop, Adagrad.")
+    parser.add_argument("--optimizer-kwargs",type=str,default="",help="Extra optimizer arguments as key=value pairs, e.g. 'betas=(0.9,0.999),eps=1e-8,weight_decay=0.01'.",)
+
 
 
     args = parser.parse_args()

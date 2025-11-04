@@ -47,6 +47,37 @@ def build_surrogate(surr_name, config):
     return surr_fn(**kwargs)
 
 
+def built_optimizer(config):
+     # --- Build optimizer parameters ---
+        optimizer_class = getattr(torch.optim, config.optimizer_class)
+
+        # Extract Adam-specific parameters if present
+        beta1 = getattr(config, "beta1", None)
+        beta2 = getattr(config, "beta2", None)
+
+        # also support nested 'adam_betas' dict if wandb flattens it differently
+        if hasattr(config, "adam_betas"):
+            betas_cfg = getattr(config, "adam_betas")
+            if isinstance(betas_cfg, dict):
+                beta1 = betas_cfg.get("beta1", beta1)
+                beta2 = betas_cfg.get("beta2", beta2)
+
+        # Fallbacks to AdamW defaults if not found
+        if beta1 is None:
+            beta1 = 0.9
+        if beta2 is None:
+            beta2 = 0.999
+
+        eps = getattr(config, "eps", 1e-8)
+
+        optimizer_kwargs = {
+            "lr": config.lr,
+            "betas": (beta1, beta2),
+            "eps": eps,
+        }
+        return optimizer_class, optimizer_kwargs
+
+
 def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
     scheduler_map = {
         "none": None,
@@ -107,9 +138,12 @@ def training_run():
 
         scheduler_class, scheduler_kwargs = parse_scheduler_args(config.scheduler_class, config.scheduler_kwargs)
 
+        optimizer_class, optimizer_kwargs = built_optimizer(config)
+
         # Build model instance (mirror your original kwargs)
         model = SpikeSynth(
-            optimizer_class=getattr(torch.optim, config.optimizer_class),
+            optimizer_class=optimizer_class,
+            optimizer_kwargs=optimizer_kwargs,
             beta=config.beta,
             lr=config.lr,
             num_hidden=config.num_hidden,
