@@ -1,4 +1,5 @@
 method: random
+name: "NetTopologySweep"
 metric:
   name: val_loss
   goal: minimize
