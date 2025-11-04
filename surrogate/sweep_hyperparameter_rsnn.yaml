@@ -38,7 +38,7 @@ parameters:
   scheduler_kwargs:
     value: ""
   data_path:
-      value: "./data/dataset.ds"
+      value: "./data/small_dataset.ds"
   epochs:
-    value: 25
+    value: 30
 run_cap: 50
