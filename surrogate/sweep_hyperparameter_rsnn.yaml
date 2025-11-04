@@ -37,6 +37,8 @@ parameters:
     value: "cosine" # ["cosine", "exponential", "step", "plateau"]
   scheduler_kwargs:
     value: ""
+  data_path:
+      value: "./data/dataset.ds"
   epochs:
     value: 25
 run_cap: 50

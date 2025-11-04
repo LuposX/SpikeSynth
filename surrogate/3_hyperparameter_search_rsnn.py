@@ -89,7 +89,7 @@ def training_run():
         config = wandb.config
 
         # Load dataset - same path as your original script
-        data_path = "./data/dataset.ds"
+        data_path = config.data_path
         if not os.path.exists(data_path):
             raise FileNotFoundError(f"Dataset not found at {data_path}")
 
