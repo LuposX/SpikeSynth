@@ -137,12 +137,6 @@ def training_run():
             name=f"sweep_run_{wandb.run.id}"
         )
 
-        # Optionally watch model (be careful about large models / autolog volume)
-        try:
-            wandb_logger.watch(model)
-        except Exception as e:
-            print(f"[warning] wandb_logger.watch failed: {e}")
-
         # Define checkpoint callback
         checkpoint_dir = os.path.join(
             os.getenv("WANDB_DIR", "."),
