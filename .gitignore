@@ -13,3 +13,4 @@ surrogate/lightning_logs/*
 surrogate/pLSNN/*
 surrogate/wandb/*
 surrogate/.temp/*
+surrogate/data/small_dataset.ds
