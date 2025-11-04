@@ -135,6 +135,7 @@ def main(args):
         use_bntt=args.use_bntt,
         bntt_time_steps=args.bntt_time_steps,
         log_every_n_steps=args.log_every_n_steps,
+        use_layernorm=args.use_layernorm,
         scheduler_class=scheduler_class,
         scheduler_kwargs=scheduler_kwargs
     )
@@ -210,8 +211,8 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SpikeSynth RSNN (converted from notebook)")
 
+    # General and Monitoring
     parser.add_argument("--data", type=str, default="./data/dataset.ds", help="Path to dataset (torch file).")
-    parser.add_argument("--max-epochs", type=int, default=10, help="Max number of training epochs.")
     parser.add_argument("--experiment-name", type=str, default="test", help="WandB experiment/run name.")
     parser.add_argument("--project-name", type=str, default="Spike-Synth-Surrogate", help="WandB project name.")
     parser.add_argument("--logging-directory", type=str, default=".temp", help="Local directory where logs/wandb files are stored.")
@@ -221,9 +222,7 @@ if __name__ == "__main__":
     parser.add_argument("--no-wandb", action="store_true", help="Disable WandB logging.")
     parser.add_argument("--log-every-n-steps", type=int, default=10, help="Logging frequency (trainer.log_every_n_steps)")
 
-    # Model/training hyperparameters
-    parser.add_argument("--lr", type=float, default=0.005, help="Learning rate.")
-    parser.add_argument("--batch-size", type=int, default=2048, help="Batch size (passed to SpikeSynth).")
+    # Model hyperparameters
     parser.add_argument("--num-hidden", type=int, default=256, help="Number of hidden units.")
     parser.add_argument("--num-hidden-layers", type=int, default=4, help="Number of hidden layers.")
     parser.add_argument("--beta", type=float, default=0.9, help="Beta (optimizer momentum-like).")
@@ -235,14 +234,18 @@ if __name__ == "__main__":
     parser.add_argument("--use-gpu-if-available", action="store_true", help="Use GPU if available (default: off).")
     parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whether to use Batchnorm or not.")
     parser.add_argument("--bntt-time-steps", type=int, default=100, help="Batchnorm needs to know the sequence length beforehand.")
+    parser.add_argument("--use-layernorm", type=str2bool, default=False, help="Whether to use Layernorm or not.")
 
+    # Training hyperparameters
+    parser.add_argument("--max-epochs", type=int, default=10, help="Max number of training epochs.")
+    parser.add_argument("--lr", type=float, default=0.005, help="Learning rate.")
+    parser.add_argument("--batch-size", type=int, default=2048, help="Batch size (passed to SpikeSynth).")
     parser.add_argument("--scheduler-class", type=str, default="cosine", choices=["none", "cosine", "exponential", "step", "plateau"], help="Learning rate scheduler type. Options: none, cosine, exponential, step, plateau.")
     parser.add_argument("--scheduler-kwargs", type=str, default="", help=(
         "Extra scheduler arguments as key=value pairs separated by commas, e.g. "
         "'gamma=0.95,T_max=50,step_size=10'. Ignored if scheduler=none."
     ),)
     parser.add_argument("--optimizer-class",type=str,default="AdamW",choices=["Adam", "AdamW", "SGD", "RMSprop", "Adagrad"],help="Optimizer to use. Options: Adam, AdamW, SGD, RMSprop, Adagrad.")
-
 
 
     args = parser.parse_args()

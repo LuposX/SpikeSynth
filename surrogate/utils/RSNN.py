@@ -24,6 +24,7 @@ class SpikeSynth(L.LightningModule):
                  use_bntt,
                  scheduler_class,
                  log_every_n_steps,
+                 use_layernorm,
                  scheduler_kwargs=None, 
                  bntt_time_steps=None,
                  train_dataset=None,
@@ -91,6 +92,9 @@ class SpikeSynth(L.LightningModule):
 
             log_every_n_steps (int):
                 Log every n steps.
+
+            use_layernorm (bool):
+                If layernorm should be used afetr every Lif layer.
         """
         super().__init__()
         
@@ -107,6 +111,7 @@ class SpikeSynth(L.LightningModule):
         self.norm = nn.LayerNorm(self.num_inputs + self.num_params)
         self.lif_layers = nn.ModuleList()
 
+        # For temporal skip connection
         self.temp_skip_projs = nn.ModuleList()
         
         # For layer-wise skip connections
@@ -114,6 +119,9 @@ class SpikeSynth(L.LightningModule):
 
         # Initialize BNTT modules if requested
         self.layer_bntt = nn.ModuleList()
+
+        # For layernorm
+        self.layer_norms = nn.ModuleList() 
         
         input_size = self.num_inputs + self.num_params
         for i in range(self.hparams.num_hidden_layers):
@@ -146,8 +154,12 @@ class SpikeSynth(L.LightningModule):
                     self.layer_bntt.append(BatchNormTT1d(self.hparams.num_hidden, self.hparams.bntt_time_steps))  
             else:
                 self.layer_bntt.append(None)
-                
-            
+
+            if self.hparams.use_layernorm:
+                self.layer_norms.append(nn.LayerNorm(self.hparams.num_hidden))
+            else:
+                self.layer_norms.append(None)
+
             input_size = self.hparams.num_hidden
 
         self.output_layer = nn.Linear(self.hparams.num_hidden, self.num_outputs)
@@ -195,6 +207,13 @@ class SpikeSynth(L.LightningModule):
             lif_out = lif(x_seq)
 
             self.spike_counts.append(lif_out.mean())
+
+            # Apply LayerNorm if requested
+            if self.hparams.use_layernorm and self.layer_norms[i] is not None:
+                # Permute to (B, T, F) for LayerNorm and back
+                lif_out = lif_out.permute(1, 0, 2)
+                lif_out = self.layer_norms[i](lif_out)
+                lif_out = lif_out.permute(1, 0, 2)
 
             # Apply Batch Normalisation Through Time (BNTT)
             if self.hparams.use_bntt:

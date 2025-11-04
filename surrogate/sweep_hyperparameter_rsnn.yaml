@@ -6,15 +6,15 @@ parameters:
   lr:
     value: 0.005
   num_hidden:
-    value: [2, 4, 8, 16, 32, 64]
+    values: [2, 4, 8, 16, 32, 64]
   # Defines the Decay of the LIF Neurons
   beta:
-    value: [0.3, 0.5, 0.8]
+    values: [0.3, 0.5, 0.8]
   surrogate_gradient:
       value: "atan"
   # Slope of the surrogate gradient function
   alpha:
-      value: [2, 4, 8, 16]
+      values: [2, 4, 8, 16]
   dropout:
       value: 0
   batch_size:
@@ -22,10 +22,12 @@ parameters:
   optimizer_class:
     value: "AdamW"
   num_hidden_layers:
-      value: [1, 2, 4, 8, 16]
+      values: [1, 2, 4, 8, 16]
   temporal_skip:
       value: -1
   use_bntt:
+      value: False
+  use_layernorm:
       value: False
   bntt_time_steps:
       value: 100

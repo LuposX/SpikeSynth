@@ -124,6 +124,8 @@ def training_run():
             max_epochs=config.epochs,
             temporal_skip=config.temporal_skip,
             layer_skip=config.layer_skip,
+            log_every_n_steps=10,
+            use_layernorm=config.use_layernorm,
             scheduler_class=scheduler_class,
             scheduler_kwargs=scheduler_kwargs
         )
