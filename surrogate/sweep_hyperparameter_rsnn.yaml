@@ -1,46 +1,31 @@
-# Phase 2: Find good values for optimizer
+#  Phase 1: topology + neuron dynamics. Keep optimizer and scheduler fixed.
 
-method: bayes
-name: "NetOptimizerSweep"
+method: random
+name: "NetTopologySweep"
 metric:
   name: val_loss
   goal: minimize
 parameters:
   lr:
-    distribution: log_uniform
-    min: 1e-5
-    max: 1e-2
+    value: 0.005
   num_hidden:
-    value: 64
+    values: [4, 8, 16, 32, 64, 128, 256]
   # Defines the Decay of the LIF Neurons
   beta:
-    values: 0.8
+    values: [0.3, 0.5, 0.8]
   surrogate_gradient:
       value: "atan"
   # Slope of the surrogate gradient function
   alpha:
-      value: 2
+      values: [2, 4, 6, 8]
   dropout:
       value: 0
   batch_size:
     value: 2048
   optimizer_class:
     value: "AdamW"
-  adam_betas:
-    beta1:
-      distribution: uniform
-      min: 0.85
-      max: 0.99
-    beta2:
-      distribution: uniform
-      min: 0.98
-      max: 0.9999
-  eps:
-    distribution: log_uniform
-    min: 1e-9
-    max: 1e-6
   num_hidden_layers:
-      value: 4
+      values: [2, 4, 8, 16]
   temporal_skip:
       value: -1
   use_bntt:
@@ -58,5 +43,5 @@ parameters:
   data_path:
       value: "./data/small_dataset.ds"
   epochs:
-    value: 20
+    value: 40
 run_cap: 50
