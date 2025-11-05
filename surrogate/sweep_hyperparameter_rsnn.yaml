@@ -23,7 +23,7 @@ parameters:
   dropout:
       value: 0
   batch_size:
-    value: [512, 1024, 2048, 4096]
+    value: 2048
   optimizer_class:
     value: "AdamW"
   adam_betas:
@@ -58,5 +58,5 @@ parameters:
   data_path:
       value: "./data/small_dataset.ds"
   epochs:
-    value: 40
+    value: 20
 run_cap: 50
