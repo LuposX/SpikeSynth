@@ -26,6 +26,7 @@ class SpikeSynth(L.LightningModule):
                  scheduler_class,
                  log_every_n_steps,
                  use_layernorm,
+                 use_slstm,
                  scheduler_kwargs=None, 
                  bntt_time_steps=None,
                  train_dataset=None,
@@ -94,6 +95,9 @@ class SpikeSynth(L.LightningModule):
             scheduler_class (torch.optim.lr_scheduler):
                 What Learning Rate Scheduler should be used for training.
 
+            use_slstm (bool): 
+                If True, use snn.SLSTM layers for the recurrent layers.
+
             log_every_n_steps (int):
                 Log every n steps.
 
@@ -126,31 +130,45 @@ class SpikeSynth(L.LightningModule):
 
         # For layernorm
         self.layer_norms = nn.ModuleList() 
+
+        if self.hparams.use_slstm and self.hparams.dropout != 0:
+             raise ValueError("SLSTM doesn't support dropout.") 
         
         input_size = self.num_inputs + self.num_params
         for i in range(self.hparams.num_hidden_layers):
-            self.lif_layers.append(
-                snn.LeakyParallel(
+            # The neuron model to use for layers
+            if self.hparams.use_slstm:
+                # SLSTM has a different API: it returns (spk, syn, mem) per time-step
+                layer = snn.SLSTM(
+                    input_size=input_size, 
+                    hidden_size=self.hparams.num_hidden,
+                    spike_grad=self.surrogate_gradient
+                )
+            else:
+                layer = snn.LeakyParallel(
                     input_size=input_size,
                     hidden_size=self.hparams.num_hidden,
                     beta=self.hparams.beta,
                     spike_grad=self.surrogate_gradient,
                     dropout=self.hparams.dropout
                 )
-            )
-            
+        
+            # append the layer for BOTH cases (this was missing for SLSTM)
+            self.lif_layers.append(layer)
+        
             # Temporal residual projection
             if input_size != self.hparams.num_hidden and self.hparams.temporal_skip != -1:
                 self.temp_skip_projs.append(nn.Linear(input_size, self.hparams.num_hidden))
             else:
                 self.temp_skip_projs.append(nn.Identity())
-            
+        
             # Layer-wise skip projection
             if self.hparams.layer_skip > 0 and i >= self.hparams.layer_skip:
                 self.layer_skip_projs.append(nn.Linear(self.hparams.num_hidden, self.hparams.num_hidden))
             else:
                 self.layer_skip_projs.append(None)
-
+        
+            # Batchnorm through time
             if self.hparams.use_bntt:
                 if self.hparams.bntt_time_steps is None:
                     raise ValueError("bntt_time_steps must be specified if use_bntt=True")
@@ -158,14 +176,15 @@ class SpikeSynth(L.LightningModule):
                     self.layer_bntt.append(BatchNormTT1d(self.hparams.num_hidden, self.hparams.bntt_time_steps))  
             else:
                 self.layer_bntt.append(None)
-
+        
+            # Layernorm
             if self.hparams.use_layernorm:
                 self.layer_norms.append(nn.LayerNorm(self.hparams.num_hidden))
             else:
                 self.layer_norms.append(None)
-
+        
             input_size = self.hparams.num_hidden
-
+        
         self.output_layer = nn.Linear(self.hparams.num_hidden, self.num_outputs)
          
     def forward(self, x, params=None):
@@ -204,45 +223,112 @@ class SpikeSynth(L.LightningModule):
         T, B, F = x_seq.shape
     
         skip_k = self.hparams.temporal_skip
-    
-        # Forward through LIF layers
-        layer_outputs = [] 
-        for i, lif in enumerate(self.lif_layers):
-            lif_out = lif(x_seq)
 
-            self.spike_counts.append(lif_out.mean())
-
-            # Apply LayerNorm if requested
-            if self.hparams.use_layernorm and self.layer_norms[i] is not None:
-                # Permute to (B, T, F) for LayerNorm and back
-                lif_out = lif_out.permute(1, 0, 2)
-                lif_out = self.layer_norms[i](lif_out)
-                lif_out = lif_out.permute(1, 0, 2)
-
-            # Apply Batch Normalisation Through Time (BNTT)
-            if self.hparams.use_bntt:
-                lif_out_norm = []
-                for t in range(lif_out.shape[0]):  # T dimension
-                    lif_out_norm.append(self.layer_bntt[i][t](lif_out[t]))
-                lif_out = torch.stack(lif_out_norm, dim=0)
-
-            # Temporal skip connection
-            if skip_k == -1 or skip_k >= T:
-                x_seq = lif_out
+        if self.hparams.use_slstm:
+            num_layers = len(self.lif_layers)
+            # initialize state containers for all layers
+            syn_states = []
+            mem_states = []
+            for layer in self.lif_layers:
+                syn, mem = layer.reset_mem()
+                syn_states.append(syn.to(x_seq.device))
+                mem_states.append(mem.to(x_seq.device))
+        
+            # track time outputs for each layer if needed
+            track_layer_time = (skip_k != -1)
+            if track_layer_time:
+                layer_outputs_time = [ [] for _ in range(num_layers) ]
+        
+            # accumulator for spike counts per layer
+            spike_count_acc = [0.0 for _ in range(num_layers)]
+        
+            # run through time
+            for t in range(T):
+                curr_input = x_seq[t]  # shape (B, F_in)
+                for i, layer in enumerate(self.lif_layers):
+                    spk, syn_states[i], mem_states[i] = layer(curr_input, syn_states[i], mem_states[i])
+        
+                    if self.hparams.use_layernorm and self.layer_norms[i] is not None:
+                        spk = self.layer_norms[i](spk)
+        
+                    if self.hparams.use_bntt and self.layer_bntt[i] is not None:
+                        spk = self.layer_bntt[i][t](spk)
+        
+                    # temporal skip from earlier time step (project previous input)
+                    if skip_k != -1 and t >= skip_k:
+                        prev_t = x_seq[t - skip_k]
+                        prev_proj = self.temp_skip_projs[i](prev_t)
+                        spk = spk + prev_proj
+        
+                    # layer-skip: take output from earlier layer at same time
+                    if self.hparams.layer_skip > 0 and i >= self.hparams.layer_skip:
+                        # ensure we have a stored past layer output for this time step
+                        skip_layer_out = layer_outputs_time[i - self.hparams.layer_skip][t] if track_layer_time else None
+                        if self.layer_skip_projs[i] is not None:
+                            skip_proj = self.layer_skip_projs[i](skip_layer_out)
+                        else:
+                            skip_proj = skip_layer_out
+                        if skip_proj is not None:
+                            spk = spk + skip_proj
+        
+                    # store this layer's output for the current time if tracking
+                    if track_layer_time:
+                        layer_outputs_time[i].append(spk)
+        
+                    curr_input = spk
+                    spike_count_acc[i] += spk.mean().item()
+        
+            # construct last-layer sequence: (T, B, F_last)
+            if track_layer_time:
+                last_layer_seq = torch.stack(layer_outputs_time[-1], dim=0)
             else:
-                prev = torch.zeros_like(x_seq)
-                prev[skip_k:] = x_seq[:-skip_k]
-                prev_proj = self.temp_skip_projs[i](prev)
-                x_seq = lif_out + prev_proj
+                last_layer_seq = curr_input.unsqueeze(0).repeat(T, 1, 1)
+        
+            # average spike counts over time
+            self.spike_counts = [c / T for c in spike_count_acc]
+        
+            x_seq = last_layer_seq
+        else:
+            # Forward through LIF layers
+            layer_outputs = [] 
+            for i, lif in enumerate(self.lif_layers):
+                lif_out = lif(x_seq)
+    
+                self.spike_counts.append(lif_out.mean())
+    
+                # Apply LayerNorm if requested
+                if self.hparams.use_layernorm and self.layer_norms[i] is not None:
+                    # Permute to (B, T, F) for LayerNorm and back
+                    lif_out = lif_out.permute(1, 0, 2)
+                    lif_out = self.layer_norms[i](lif_out)
+                    lif_out = lif_out.permute(1, 0, 2)
+    
+                # Apply Batch Normalisation Through Time (BNTT)
+                if self.hparams.use_bntt:
+                    lif_out_norm = []
+                    for t in range(lif_out.shape[0]):  # T dimension
+                        lif_out_norm.append(self.layer_bntt[i][t](lif_out[t]))
+                    lif_out = torch.stack(lif_out_norm, dim=0)
+    
+                # Temporal skip connection
+                if skip_k == -1 or skip_k >= T:
+                    x_seq = lif_out
+                else:
+                    prev = torch.zeros_like(x_seq)
+                    prev[skip_k:] = x_seq[:-skip_k]
+                    prev_proj = self.temp_skip_projs[i](prev)
+                    x_seq = lif_out + prev_proj
+    
+                # Layer-wise skip connection
+                if self.hparams.layer_skip > 0 and i >= self.hparams.layer_skip:
+                    skip_layer_out = layer_outputs[i - self.hparams.layer_skip]
+                    skip_proj = self.layer_skip_projs[i](skip_layer_out)
+                    x_seq = x_seq + skip_proj
+    
+                layer_outputs.append(x_seq)
 
-            # Layer-wise skip connection
-            if self.hparams.layer_skip > 0 and i >= self.hparams.layer_skip:
-                skip_layer_out = layer_outputs[i - self.hparams.layer_skip]
-                skip_proj = self.layer_skip_projs[i](skip_layer_out)
-                x_seq = x_seq + skip_proj
-
-            layer_outputs.append(x_seq)
-
+                print(x_seq.shape)
+    
         x_seq_b = x_seq.permute(1, 0, 2)
         out = self.output_layer(x_seq_b).squeeze()
         return out

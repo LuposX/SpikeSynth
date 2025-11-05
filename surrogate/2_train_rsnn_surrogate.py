@@ -162,6 +162,7 @@ def main(args):
         temporal_skip=args.temporal_skip,
         layer_skip=args.layer_skip,
         use_bntt=args.use_bntt,
+        use_slstm=args.use_slstm,
         bntt_time_steps=args.bntt_time_steps,
         log_every_n_steps=args.log_every_n_steps,
         use_layernorm=args.use_layernorm,
@@ -264,6 +265,7 @@ if __name__ == "__main__":
     parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whether to use Batchnorm or not.")
     parser.add_argument("--bntt-time-steps", type=int, default=100, help="Batchnorm needs to know the sequence length beforehand.")
     parser.add_argument("--use-layernorm", type=str2bool, default=False, help="Whether to use Layernorm or not.")
+    parser.add_argument("--use-slstm", type=str2bool, default=False, help="Whether to use SLSTM instead of LIF as neuron model.")
 
     # Training hyperparameters
     parser.add_argument("--max-epochs", type=int, default=10, help="Max number of training epochs.")
