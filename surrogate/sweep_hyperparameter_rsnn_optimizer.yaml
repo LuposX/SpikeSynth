@@ -55,6 +55,9 @@ parameters:
   use_bntt:
     value: False
 
+ use_slstm:
+      value: False
+
   use_layernorm:
     value: False
 

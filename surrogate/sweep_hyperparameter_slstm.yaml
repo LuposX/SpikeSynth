@@ -1,7 +1,7 @@
 #  Phase 1: topology + neuron dynamics. Keep optimizer and scheduler fixed.
 
 method: random
-name: "NetTopologySweep"
+name: "NetTopologySweepLSTM"
 metric:
   name: val_loss
   goal: minimize
@@ -18,6 +18,8 @@ parameters:
   # Slope of the surrogate gradient function
   alpha:
       values: [2, 4, 6, 8]
+  use_slstm:
+      value: True
   dropout:
       value: 0
   batch_size:
@@ -29,8 +31,6 @@ parameters:
   temporal_skip:
       value: -1
   use_bntt:
-      value: False
-  use_slstm:
       value: False
   use_layernorm:
       value: False
