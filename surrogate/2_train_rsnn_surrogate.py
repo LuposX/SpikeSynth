@@ -16,6 +16,8 @@ import torch
 from torch.utils.data import TensorDataset
 
 import snntorch as snn
+import numpy as np
+import random
 
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -109,29 +111,20 @@ def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
 def main(args):
     logger.info("Loading dataset from %s", args.data)
     data = torch.load(args.data)
-
-    logger.info("Data keys: %s", list(data.keys()))
-    logger.info("X_train shape: %s", tuple(data["X_train"].shape))
-    logger.info("Y_train shape: %s", tuple(data["Y_train"].shape))
-
-    # Extract tensors
     X_train, Y_train = data["X_train"], data["Y_train"]
     X_valid, Y_valid = data["X_valid"], data["Y_valid"]
     X_test, Y_test = data["X_test"], data["Y_test"]
 
-    train_dataset = TensorDataset(X_train, Y_train)
-    valid_dataset = TensorDataset(X_valid, Y_valid)
-    test_dataset = TensorDataset(X_test, Y_test)
+    train_dataset = torch.utils.data.TensorDataset(X_train, Y_train)
+    valid_dataset = torch.utils.data.TensorDataset(X_valid, Y_valid)
+    test_dataset = torch.utils.data.TensorDataset(X_test, Y_test)
 
-    # Logging directory setup
-    script_dir = os.getcwd()
-    logging_directory = os.path.join(script_dir, args.logging_directory)
-    logging_directory = os.path.abspath(logging_directory)
+    # Logging directory
+    logging_directory = os.path.abspath(args.logging_directory)
     os.makedirs(logging_directory, exist_ok=True)
     os.environ["WANDB_DIR"] = logging_directory
 
-    # Build surrogate gradient
-    surrogate = None
+    # Surrogate gradient
     if args.surrogate == "atan":
         surrogate = snn.surrogate.atan()
     elif args.surrogate == "fast_sigmoid":
@@ -140,102 +133,99 @@ def main(args):
         logger.warning("Unknown surrogate '%s', falling back to atan()", args.surrogate)
         surrogate = snn.surrogate.atan()
 
+    # Scheduler and optimizer
     scheduler_class, scheduler_kwargs = parse_scheduler_args(args.scheduler_class, args.scheduler_kwargs)
-    
     optimizer_class = get_optimizer_class(args.optimizer_class)
     optimizer_kwargs = parse_optimizer_kwargs(args.optimizer_kwargs)
-    
-    # Instantiate model
-    model = SpikeSynth(
-        optimizer_class=optimizer_class,
-        optimizer_kwargs=optimizer_kwargs,
-        beta=args.beta,
-        lr=args.lr,
-        num_hidden=args.num_hidden,
-        batch_size=args.batch_size,
-        num_hidden_layers=args.num_hidden_layers,
-        dropout=args.dropout,
-        train_dataset=train_dataset,
-        valid_dataset=valid_dataset,
-        max_epochs=args.max_epochs,
-        surrogate_gradient=surrogate,
-        temporal_skip=args.temporal_skip,
-        layer_skip=args.layer_skip,
-        use_bntt=args.use_bntt,
-        use_slstm=args.use_slstm,
-        bntt_time_steps=args.bntt_time_steps,
-        log_every_n_steps=args.log_every_n_steps,
-        use_layernorm=args.use_layernorm,
-        scheduler_class=scheduler_class,
-        scheduler_kwargs=scheduler_kwargs
-    )
-
-    summary = ModelSummary(model, max_depth=1)
-    num_params = summary.total_parameters
-    trainable_params = summary.trainable_parameters
-    logger.info("Model has %d trainable parameters (total %d)", trainable_params, num_params)
-
-    # WandB logger
-    wandb_logger = None
-    if not args.no_wandb:
-        logger.info("Initializing WandbLogger (project=%s name=%s) at %s", args.project_name, args.experiment_name, logging_directory)
-        wandb_logger = WandbLogger(log_model=True, project=args.project_name, name=args.experiment_name, save_dir=logging_directory)
-        try:
-            wandb_logger.experiment.summary["trainable_parameters"] = trainable_params
-            wandb_logger.experiment.summary["total_parameters"] = num_params
-        except Exception as e:
-            logger.warning("wandb_logger.experiment.summary() failed: %s", e)
-        try:
-            wandb_logger.experiment.log_code(".", include_fn=lambda path: path.endswith(".py") or path.endswith(".ipynb"))
-        except Exception as e:
-            logger.warning("wandb_logger.experiment.log_code() failed: %s", e)
-    else:
-        logger.info("WandB disabled (--no-wandb).")
 
     # Checkpoint callback
     os.makedirs(args.checkpoint_path, exist_ok=True)
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.checkpoint_path,
-        filename=f"{args.experiment_name}spike_model-{{epoch:02d}}-{{val_loss:.2f}}",
+        filename=f"{args.experiment_name}-run{{run_idx}}-{{epoch:02d}}-{{val_loss:.2f}}",
         save_top_k=1,
         monitor=args.monitor,
         mode=args.monitor_mode,
     )
 
     accelerator = "gpu" if torch.cuda.is_available() and args.use_gpu_if_available else "cpu"
-    logger.info("Using accelerator=%s (torch.cuda.is_available()=%s, use_gpu_if_available=%s)", accelerator, torch.cuda.is_available(), args.use_gpu_if_available)
+    logger.info("Using accelerator=%s", accelerator)
 
-    trainer_kwargs = dict(
-        max_epochs=args.max_epochs,
-        accelerator=accelerator,
-        logger=wandb_logger if not args.no_wandb else None,
-        callbacks=[checkpoint_callback],
-        log_every_n_steps=args.log_every_n_steps,
-    )
+    # Run loop for multiple seeds
+    for run_idx in range(args.num_runs):
+        seed = args.base_seed + run_idx
+        logger.info("=== Starting run %d/%d with seed %d ===", run_idx + 1, args.num_runs, seed)
 
-    trainer = Trainer(**trainer_kwargs)
+        # Set seeds
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
-    # Optionally compile model
-    if args.torch_compile:
-        try:
-            logger.info("Attempting torch.compile(model)")
-            model = torch.compile(model)
-        except Exception as e:
-            logger.warning("torch.compile failed: %s", e)
+        # Update experiment name for this run
+        run_name = f"{args.experiment_name}_run{run_idx+1}"
 
-    # Train the model
-    logger.info("Starting training for up to %d epochs", args.max_epochs)
-    trainer.fit(model)
+        # WandB logger
+        wandb_logger = None
+        if not args.no_wandb:
+            wandb_logger = WandbLogger(log_model=True, project=args.project_name, name=run_name, save_dir=logging_directory)
 
-    # Finalize wandb
-    if wandb_logger and not args.no_wandb:
-        try:
-            wandb_logger.finalize("success")
-        except Exception as e:
-            logger.warning("wandb_logger.finalize() failed: %s", e)
+        # Instantiate model
+        model = SpikeSynth(
+            optimizer_class=optimizer_class,
+            optimizer_kwargs=optimizer_kwargs,
+            beta=args.beta,
+            lr=args.lr,
+            num_hidden=args.num_hidden,
+            batch_size=args.batch_size,
+            num_hidden_layers=args.num_hidden_layers,
+            dropout=args.dropout,
+            train_dataset=train_dataset,
+            valid_dataset=valid_dataset,
+            max_epochs=args.max_epochs,
+            surrogate_gradient=surrogate,
+            temporal_skip=args.temporal_skip,
+            layer_skip=args.layer_skip,
+            use_bntt=args.use_bntt,
+            use_slstm=args.use_slstm,
+            bntt_time_steps=args.bntt_time_steps,
+            log_every_n_steps=args.log_every_n_steps,
+            use_layernorm=args.use_layernorm,
+            scheduler_class=scheduler_class,
+            scheduler_kwargs=scheduler_kwargs
+        )
 
-    logger.info("Best checkpoint saved at: %s", checkpoint_callback.best_model_path or "N/A")
-    print("Best checkpoint saved at:", checkpoint_callback.best_model_path or "N/A")
+        # Optional torch.compile
+        if args.torch_compile:
+            try:
+                logger.info("Attempting torch.compile(model)")
+                model = torch.compile(model)
+            except Exception as e:
+                logger.warning("torch.compile failed: %s", e)
+
+        # Trainer
+        trainer = Trainer(
+            max_epochs=args.max_epochs,
+            accelerator=accelerator,
+            logger=wandb_logger if not args.no_wandb else None,
+            callbacks=[checkpoint_callback],
+            log_every_n_steps=args.log_every_n_steps,
+        )
+
+        # Train
+        trainer.fit(model)
+
+        # Finalize WandB logger
+        if wandb_logger and not args.no_wandb:
+            try:
+                wandb_logger.finalize("success")
+            except Exception as e:
+                logger.warning("wandb_logger.finalize() failed: %s", e)
+
+        logger.info("Run %d finished. Best checkpoint: %s", run_idx + 1, checkpoint_callback.best_model_path or "N/A")
 
 
 if __name__ == "__main__":
@@ -251,6 +241,11 @@ if __name__ == "__main__":
     parser.add_argument("--monitor-mode", dest="monitor_mode", choices=["min", "max"], default="min", help="Monitor mode for checkpointing/early stopping.")
     parser.add_argument("--no-wandb", action="store_true", help="Disable WandB logging.")
     parser.add_argument("--log-every-n-steps", type=int, default=10, help="Logging frequency (trainer.log_every_n_steps)")
+
+    # Multi-run / seeding
+    parser.add_argument("--num-runs", type=int, default=1, help="Number of independent runs with different seeds for statistics.")
+    parser.add_argument("--base-seed", type=int, default=42, help="Base seed for reproducibility. Each run will increment from this.")
+
 
     # Model hyperparameters
     parser.add_argument("--num-hidden", type=int, default=256, help="Number of hidden units.")

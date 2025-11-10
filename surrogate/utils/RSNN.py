@@ -326,8 +326,6 @@ class SpikeSynth(L.LightningModule):
                     x_seq = x_seq + skip_proj
     
                 layer_outputs.append(x_seq)
-
-                print(x_seq.shape)
     
         x_seq_b = x_seq.permute(1, 0, 2)
         out = self.output_layer(x_seq_b).squeeze()
