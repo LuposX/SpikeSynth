@@ -19,6 +19,7 @@ import snntorch as snn
 import numpy as np
 import random
 import ast
+import re
 
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -53,30 +54,33 @@ def get_optimizer_class(name):
 
 
 def parse_optimizer_kwargs(kwargs_str):
-    """Parse comma-separated key=value pairs into a dict."""
+    """Parse comma-separated key=value pairs into a dict, safely handling tuples and scientific notation."""
     kwargs = {}
     if not kwargs_str:
         return kwargs
-    for kv in kwargs_str.split(","):
+
+    # Split on commas that are NOT inside parentheses
+    parts = re.split(r',(?![^(]*\))', kwargs_str)
+
+    for kv in parts:
         if "=" not in kv:
             continue
         key, value = kv.split("=", 1)
-        value = value.strip()
-        # Try to safely evaluate tuples, floats, ints, bools
+        key, value = key.strip(), value.strip()
+
+        # Try to safely evaluate Python literals (numbers, tuples, lists, bools)
         try:
-            evaluated = eval(value, {"__builtins__": {}})  # allow tuples, lists
-            value = evaluated
-        except Exception:
-            try:
-                if "." in value:
-                    value = float(value)
-                else:
-                    value = int(value)
-            except ValueError:
-                if value.lower() in ["true", "false"]:
-                    value = value.lower() == "true"
-        kwargs[key.strip()] = value
-    return kwargs
+            value = ast.literal_eval(value)
+        except (ValueError, SyntaxError):
+            # Fallback: handle booleans or keep as string
+            if value.lower() in ["true", "false"]:
+                value = value.lower() == "true"
+            else:
+                value = value
+
+        kwargs[key] = value
+
+    return kwarg
 
 
 def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
