@@ -80,7 +80,7 @@ def parse_optimizer_kwargs(kwargs_str):
 
         kwargs[key] = value
 
-    return kwarg
+    return kwargs
 
 
 def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
