@@ -18,6 +18,7 @@ from torch.utils.data import TensorDataset
 import snntorch as snn
 import numpy as np
 import random
+import ast
 
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -89,24 +90,21 @@ def parse_scheduler_args(scheduler_name, scheduler_kwargs_str):
 
     scheduler_class = scheduler_map.get(scheduler_name.lower(), None)
 
-    # Parse kwargs string into dict
     kwargs = {}
     if scheduler_kwargs_str:
         for kv in scheduler_kwargs_str.split(","):
             if "=" in kv:
-                key, value = kv.split("=")
-                # try to cast to int or float when possible
+                key, value = kv.split("=", 1)
+                key = key.strip()
+                value = value.strip()
                 try:
-                    if "." in value:
-                        value = float(value)
-                    else:
-                        value = int(value)
-                except ValueError:
+                    # safely evaluate Python literals (numbers, tuples, bool, None)
+                    value = ast.literal_eval(value)
+                except (ValueError, SyntaxError):
                     pass
-                kwargs[key.strip()] = value
+                kwargs[key] = value
 
     return scheduler_class, kwargs
-
 
 def main(args):
     logger.info("Loading dataset from %s", args.data)
@@ -245,7 +243,6 @@ if __name__ == "__main__":
     # Multi-run / seeding
     parser.add_argument("--num-runs", type=int, default=1, help="Number of independent runs with different seeds for statistics.")
     parser.add_argument("--base-seed", type=int, default=42, help="Base seed for reproducibility. Each run will increment from this.")
-
 
     # Model hyperparameters
     parser.add_argument("--num-hidden", type=int, default=256, help="Number of hidden units.")
