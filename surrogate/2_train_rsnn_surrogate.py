@@ -20,6 +20,7 @@ import numpy as np
 import random
 import ast
 import re
+import wandb
 
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -224,6 +225,7 @@ def main(args):
         if wandb_logger and not args.no_wandb:
             try:
                 wandb_logger.finalize("success")
+                wandb.finish()
             except Exception as e:
                 logger.warning("wandb_logger.finalize() failed: %s", e)
 
