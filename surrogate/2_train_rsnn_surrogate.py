@@ -23,7 +23,7 @@ import re
 import wandb
 
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning import Trainer
 from pytorch_lightning.utilities.model_summary import ModelSummary
 
@@ -176,6 +176,18 @@ def main(args):
         if not args.no_wandb:
             wandb_logger = WandbLogger(log_model=True, project=args.project_name, name=run_name, save_dir=logging_directory)
 
+        callbacks = [checkpoint_callback]
+        if args.early_stopping:
+            early_stopping_callback = EarlyStopping(
+                monitor=args.monitor,
+                mode=args.monitor_mode,
+                patience=args.early_stopping_patience,
+                min_delta=args.early_stopping_delta,
+                verbose=True,
+            )
+            callbacks.append(early_stopping_callback)
+
+
         # Instantiate model
         model = SpikeSynth(
             optimizer_class=optimizer_class,
@@ -214,7 +226,7 @@ def main(args):
             max_epochs=args.max_epochs,
             accelerator=accelerator,
             logger=wandb_logger if not args.no_wandb else None,
-            callbacks=[checkpoint_callback],
+            callbacks=callbacks,
             log_every_n_steps=args.log_every_n_steps,
         )
 
@@ -276,6 +288,10 @@ if __name__ == "__main__":
     ),)
     parser.add_argument("--optimizer-class",type=str,default="AdamW",choices=["Adam", "AdamW", "SGD", "RMSprop", "Adagrad"],help="Optimizer to use. Options: Adam, AdamW, SGD, RMSprop, Adagrad.")
     parser.add_argument("--optimizer-kwargs",type=str,default="",help="Extra optimizer arguments as key=value pairs, e.g. 'betas=(0.9,0.999),eps=1e-8,weight_decay=0.01'.",)
+    parser.add_argument("--early-stopping", type=str2bool, default=True, help="Enable early stopping.")
+    parser.add_argument("--early-stopping-patience", type=int, default=10, help="Number of epochs with no improvement after which training stops.")
+    parser.add_argument("--early-stopping-delta", type=float, default=1e-4, help="Minimum change in monitored quantity to qualify as improvement.")
+
 
 
 
