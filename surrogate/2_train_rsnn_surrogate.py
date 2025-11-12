@@ -197,7 +197,7 @@ def main(args):
             num_hidden=args.num_hidden,
             batch_size=args.batch_size,
             num_hidden_layers=args.num_hidden_layers,
-            dropout=args.dropout,
+            dropout=0, #args.dropout,
             train_dataset=train_dataset,
             valid_dataset=valid_dataset,
             max_epochs=args.max_epochs,
@@ -205,7 +205,7 @@ def main(args):
             temporal_skip=args.temporal_skip,
             layer_skip=args.layer_skip,
             use_bntt=args.use_bntt,
-            use_slstm=args.use_slstm,
+            neuron_type=args.neuron_type,
             bntt_time_steps=args.bntt_time_steps,
             log_every_n_steps=args.log_every_n_steps,
             use_layernorm=args.use_layernorm,
@@ -269,13 +269,13 @@ if __name__ == "__main__":
     parser.add_argument("--temporal-skip", type=int, default=-1, help="Temporal skip value (or None).")
     parser.add_argument("--layer-skip", type=int, default=2, help="Layer skip value.")
     parser.add_argument("--surrogate", type=str, default="atan", help="Surrogate gradient to use (e.g. 'atan').")
-    parser.add_argument("--dropout", type=float, default=0, help="Introduces a dropout layer for each LIF layer.")
+    # parser.add_argument("--dropout", type=float, default=0, help="Introduces a dropout layer for each LIF layer.")
     parser.add_argument("--torch-compile", action="store_true", help="Attempt torch.compile(model) before training.")
     parser.add_argument("--use-gpu-if-available", action="store_true", help="Use GPU if available (default: off).")
-    parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whether to use Batchnorm or not.")
+    parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whether to use Batchnorm or not. Batchnorm is applied for LeakyParallel and SLSTM after the Spike, which doesnt work well and for Leaky and RLeak neuron directly to the input (WX).")
     parser.add_argument("--bntt-time-steps", type=int, default=100, help="Batchnorm needs to know the sequence length beforehand.")
     parser.add_argument("--use-layernorm", type=str2bool, default=False, help="Whether to use Layernorm or not.")
-    parser.add_argument("--use-slstm", type=str2bool, default=False, help="Whether to use SLSTM instead of LIF as neuron model.")
+    parser.add_argument("--neuron-type", type=str, choices=["LeakyParallel", "Leaky", "RLeaky", "SLSTM"], default="LeakyParallel", help="Which type of spiking neuron to use for the spiking layers.")
 
     # Training hyperparameters
     parser.add_argument("--max-epochs", type=int, default=10, help="Max number of training epochs.")

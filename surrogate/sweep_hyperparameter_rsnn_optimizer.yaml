@@ -55,8 +55,8 @@ parameters:
   use_bntt:
     value: False
 
- use_slstm:
-      value: False
+  neuron_type:
+      value: "LeakyParallel"
 
   use_layernorm:
     value: False

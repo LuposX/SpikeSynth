@@ -18,8 +18,8 @@ parameters:
   # Slope of the surrogate gradient function
   alpha:
       values: [2, 4, 6, 8]
-  use_slstm:
-      value: True
+  neuron_type:
+      value: "SLSTM"
   dropout:
       value: 0
   batch_size:

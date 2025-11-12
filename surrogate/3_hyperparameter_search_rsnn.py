@@ -153,7 +153,7 @@ def training_run():
             num_hidden_layers=config.num_hidden_layers,
             use_bntt=config.use_bntt,
             bntt_time_steps=config.bntt_time_steps,
-            use_slstm=config.use_slstm,
+            neuron_type=config.neuron_type,
             train_dataset=train_dataset,
             valid_dataset=valid_dataset,
             max_epochs=config.epochs,
