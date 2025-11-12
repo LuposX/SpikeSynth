@@ -272,7 +272,7 @@ if __name__ == "__main__":
     # parser.add_argument("--dropout", type=float, default=0, help="Introduces a dropout layer for each LIF layer.")
     parser.add_argument("--torch-compile", action="store_true", help="Attempt torch.compile(model) before training.")
     parser.add_argument("--use-gpu-if-available", action="store_true", help="Use GPU if available (default: off).")
-    parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whether to use Batchnorm or not. Batchnorm is applied for LeakyParallel and SLSTM after the Spike, which doesnt work well and for Leaky and RLeak neuron directly to the input (WX).")
+    parser.add_argument("--use-bntt", type=str2bool, default=False, help="Whether to use Batchnorm or not. Batchnorm is applied for LeakyParallel after the Spike, which doesnt work well and for Leaky and RLeak neuron directly to the input (WX) and for SLSTM to the input.")
     parser.add_argument("--bntt-time-steps", type=int, default=100, help="Batchnorm needs to know the sequence length beforehand.")
     parser.add_argument("--use-layernorm", type=str2bool, default=False, help="Whether to use Layernorm or not.")
     parser.add_argument("--neuron-type", type=str, choices=["LeakyParallel", "Leaky", "RLeaky", "SLSTM"], default="LeakyParallel", help="Which type of spiking neuron to use for the spiking layers.")

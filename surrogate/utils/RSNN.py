@@ -344,44 +344,46 @@ class SpikeSynth(L.LightningModule):
         # ------------------ SLSTM branch ------------------
         if neuron_type == "SLSTM":
             num_layers = len(self.lif_layers)
-            syn_states = []
-            mem_states = []
+            
+            # Initialize states
+            syn_states, mem_states = [], []
             for layer in self.lif_layers:
                 syn, mem = layer.reset_mem()
                 syn_states.append(syn.to(x_seq.device))
                 mem_states.append(mem.to(x_seq.device))
-
+        
             track_layer_time = (skip_k != -1)
             layer_outputs_time = [ [] for _ in range(num_layers) ] if track_layer_time else None
             spike_acc = [0.0] * num_layers
-
+        
             for t in range(T):
-                curr_input = x_seq[t]
+                curr_input = x_seq[t] 
                 for i, layer in enumerate(self.lif_layers):
-                    spk, syn_states[i], mem_states[i] = layer(curr_input, syn_states[i], mem_states[i])
+                    processed_input = curr_input
 
-                    # normalization & bntt (per-timestep)
-                    spk = self._norm_and_bntt(i, spk, t=t, per_timestep=True)
+                    processed_input = self._norm_and_bntt(i, processed_input, t=t, per_timestep=True)
+  
+                    temp_proj = self._temporal_proj(i, t, x_seq)
+                    if temp_proj is not None:
+                        processed_input = processed_input + temp_proj
 
-                    # temporal skip
-                    prev_proj = self._temporal_proj(i, t, x_seq)
-                    if prev_proj is not None:
-                        spk = spk + prev_proj
-
-                    # layer skip
-                    skip_proj = self._layer_skip_proj(i, i, t, track_layer_time, layer_outputs_time)
-                    if skip_proj is not None:
-                        spk = spk + skip_proj
-
+                    layer_proj = self._layer_skip_proj(i, i, t, track_layer_time, layer_outputs_time)
+                    if layer_proj is not None:
+                        processed_input = processed_input + layer_proj
+        
+                    # ---- Pass through SLSTM cell ----
+                    spk, syn_states[i], mem_states[i] = layer(processed_input, syn_states[i], mem_states[i])
+        
                     if track_layer_time:
                         layer_outputs_time[i].append(spk)
-
+        
                     curr_input = spk
                     spike_acc[i] += spk.mean().item()
-
+        
             last_layer_seq = self._stack_last_layer_seq(layer_outputs_time, T, curr_input)
             self.spike_counts = [c / T for c in spike_acc]
             x_seq = last_layer_seq
+
 
         # ------------------ Leaky (per-step) branch ------------------
         elif neuron_type == "Leaky":
