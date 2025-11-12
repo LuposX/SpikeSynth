@@ -118,37 +118,26 @@ class SpikeSynth(L.LightningModule):
         self.max_epochs = max_epochs
         self.surrogate_gradient = surrogate_gradient
 
-        # save hyperparams (exclude big objects)
         self.save_hyperparameters(ignore=["surrogate_gradient", "train_dataset", "valid_dataset"])
 
-        # quick validation
         if neuron_type == "SLSTM" and dropout != 0:
             raise ValueError("SLSTM doesn't support dropout.")
 
-        # modules containers
         self.norm = nn.LayerNorm(self.num_inputs + self.num_params)
         self.lif_layers = nn.ModuleList()
-        self.leaky_linears = nn.ModuleList()    # used by Leaky and RLeaky
-        self.temp_skip_projs = nn.ModuleList()  # temporal skip projections per layer
-        self.layer_skip_projs = nn.ModuleList() # inter-layer skip projections
-        self.layer_bntt = nn.ModuleList()       # per-layer BNTT (or None)
-        self.layer_norms = nn.ModuleList()      # per-layer LayerNorm (or None)
+        self.leaky_linears = nn.ModuleList()
+        self.temp_skip_projs = nn.ModuleList()
+        self.layer_skip_projs = nn.ModuleList()
+        self.layer_bntt = nn.ModuleList()
+        self.layer_norms = nn.ModuleList()
 
-        # build layers/projections
         self._build_layers(neuron_type, bntt_time_steps)
 
-        # final projection to outputs
         self.output_layer = nn.Linear(self.hparams.num_hidden, self.num_outputs)
 
-    # Initialization helpers
     def _build_layers(self, neuron_type, bntt_time_steps):
-        """
-        Build lif_layers, leaky_linears, temp_skip_projs, layer_skip_projs,
-        layer_bntt and layer_norms based on hparams.
-        """
         input_size = self.num_inputs + self.num_params
         for i in range(self.hparams.num_hidden_layers):
-            # create neuron layer depending on type
             if neuron_type == "SLSTM":
                 layer = snn.SLSTM(
                     input_size=input_size,
@@ -168,7 +157,6 @@ class SpikeSynth(L.LightningModule):
                     beta=self.hparams.beta,
                     spike_grad=self.surrogate_gradient
                 )
-                # linear projections for Leaky (per-step)
                 if i == 0:
                     self.leaky_linears.append(nn.Linear(input_size, self.hparams.num_hidden))
                 else:
@@ -189,19 +177,16 @@ class SpikeSynth(L.LightningModule):
 
             self.lif_layers.append(layer)
 
-            # temporal skip projection: if sizes differ and temporal skip enabled, project; else Identity
             if input_size != self.hparams.num_hidden and self.hparams.temporal_skip != -1:
                 self.temp_skip_projs.append(nn.Linear(input_size, self.hparams.num_hidden))
             else:
                 self.temp_skip_projs.append(nn.Identity())
 
-            # layer-skip projection (only available when layer_skip > 0 and enough earlier layers exist)
             if self.hparams.layer_skip > 0 and i >= self.hparams.layer_skip:
                 self.layer_skip_projs.append(nn.Linear(self.hparams.num_hidden, self.hparams.num_hidden))
             else:
                 self.layer_skip_projs.append(None)
 
-            # BNTT
             if self.hparams.use_bntt:
                 if bntt_time_steps is None and self.hparams.bntt_time_steps is None:
                     raise ValueError("bntt_time_steps must be specified if use_bntt=True")
@@ -210,37 +195,37 @@ class SpikeSynth(L.LightningModule):
             else:
                 self.layer_bntt.append(None)
 
-            # layernorm
             if self.hparams.use_layernorm:
                 self.layer_norms.append(nn.LayerNorm(self.hparams.num_hidden))
             else:
                 self.layer_norms.append(None)
 
-            # next layer sees hidden-size input
             input_size = self.hparams.num_hidden
 
-    # Helper for forward
     def _norm_and_bntt(self, idx, tensor, t=None, per_timestep=False):
         """
         Apply LayerNorm (per-feature) and BNTT if present for layer idx.
-        - If per_timestep=True, tensor is (B, F) and layernorm expects (B, F) => ok.
-        - If per_timestep=False and tensor is (T, B, F), LayerNorm is applied across last dim by permuting.
-        - BNTT expects indexing by time step: BNTT[idx][t](features)
         """
-        # LayerNorm
         ln = self.layer_norms[idx]
-        if ln is not None:
+        bntt = self.layer_bntt[idx]
+        expected_feat = self.hparams.num_hidden
+
+        # LayerNorm
+        if ln is not None and tensor.shape[-1] == ln.normalized_shape[0]:
             if per_timestep:
                 tensor = ln(tensor)
             else:
-                # tensor shape: (T, B, F) -> apply ln over (B, F) view per-timestep
+                # (T, B, F) -> (B, T, F) for LayerNorm across features
                 tensor = tensor.permute(1, 0, 2)  # (B, T, F)
                 tensor = ln(tensor)
                 tensor = tensor.permute(1, 0, 2)  # (T, B, F)
+        else:
+            # If feature size doesn't match, skip LayerNorm for safety.
+            # (This commonly happens for the first layer where input_size != num_hidden.)
+            pass
 
         # BNTT
-        bntt = self.layer_bntt[idx]
-        if bntt is not None:
+        if bntt is not None and tensor.shape[-1] == expected_feat:
             if per_timestep:
                 if t is None:
                     raise ValueError("time index t required for per-timestep BNTT")
@@ -250,38 +235,28 @@ class SpikeSynth(L.LightningModule):
                 for tt in range(tensor.shape[0]):  # iterate T
                     normed.append(bntt[tt](tensor[tt]))
                 tensor = torch.stack(normed, dim=0)
+        else:
+            # If the feature-size doesn't match the BNTT expected features, skip it.
+            pass
 
         return tensor
 
     def _temporal_proj(self, idx, t, x_seq, raw_input_t=None):
-        """
-        Return temporal projection for layer idx at time t.
-        If t < skip_k or temporal skip disabled -> returns zeros/identity behavior by design.
-        raw_input_t: (B, F_in) - used by per-step branches to project current raw input from previous time step.
-        Note: temp_skip_projs[idx] expects input-sized features (T,B,F_in) or (B,F_in) depending on neuron type.
-        """
         skip_k = self.hparams.temporal_skip
         if skip_k == -1 or t < skip_k:
-            # return zero tensor of appropriate output size when needed by additions.
             proj = None
         else:
             prev = x_seq[t - skip_k]
-            # temp_skip_projs might be Linear expecting feature dim; it accepts (B, F_in) or (T, B, F_in).
             proj = self.temp_skip_projs[idx](prev)
         return proj
 
-     # Helper for forward
     def _layer_skip_proj(self, idx, i, t, track_layer_time, layer_outputs_time):
-        """
-        Return projected skip tensor from a previous layer (i - layer_skip) if available.
-        """
         if self.hparams.layer_skip <= 0 or i < self.hparams.layer_skip:
             return None
 
         if track_layer_time:
             skip_layer_out = layer_outputs_time[i - self.hparams.layer_skip][t]
         else:
-            # when not tracking time, rely on layer_outputs_time holding single-step entries (not typical)
             skip_layer_out = None
 
         if skip_layer_out is None:
@@ -293,23 +268,15 @@ class SpikeSynth(L.LightningModule):
         else:
             return skip_layer_out
 
-     # Helper for forward
     def _stack_last_layer_seq(self, layer_outputs_time, T, curr_input):
-        """
-        Build a (T, B, F) tensor for returning.
-        If we have tracked per-time outputs, stack them; otherwise replicate last `curr_input`.
-        """
         if layer_outputs_time is not None:
-            # last layer outputs_time is a list of T tensors
             return torch.stack(layer_outputs_time[-1], dim=0)
         else:
             return curr_input.unsqueeze(0).repeat(T, 1, 1)
 
-    # Helper for forward
     def forward(self, x, params=None):
         self.spike_counts = []
 
-        # ensure 3D: (batch, seq_len, channels) ; channels == 1
         if x.dim() == 2:
             x = x.unsqueeze(-1)
         elif x.dim() != 3:
@@ -317,24 +284,22 @@ class SpikeSynth(L.LightningModule):
 
         batch, seq_len, _ = x.shape
 
-        # handle static params in sequence dimension (same as original)
         if params is not None:
             if params.dim() < 2 or params.shape[1] < self.num_params:
                 raise ValueError(f"params must have shape (batch, >= {self.num_params})")
-            params_expanded = params.unsqueeze(2)  # (batch, num_params, 1)
+            params_expanded = params.unsqueeze(2)
             x = torch.cat([params_expanded, x], dim=1)
         elif seq_len <= self.num_params:
             raise ValueError(f"x sequence too short to contain static params, got seq_len={seq_len}")
 
-        static_params = x[:, :self.num_params, 0]  # (batch, num_params)
-        time_series = x[:, self.num_params:, 0]    # (batch, time_steps)
+        static_params = x[:, :self.num_params, 0]
+        time_series = x[:, self.num_params:, 0]
         time_steps = time_series.shape[1]
 
         static_repeated = static_params.unsqueeze(1).repeat(1, time_steps, 1)
         time_series_features = time_series.unsqueeze(2)
-        x_transformed = torch.cat([static_repeated, time_series_features], dim=2)  # (batch, time_steps, F_in)
+        x_transformed = torch.cat([static_repeated, time_series_features], dim=2)
 
-        # reorder to (T, B, F)
         x_seq = x_transformed.permute(1, 0, 2)
         T, B, F_in = x_seq.shape
 
@@ -344,51 +309,53 @@ class SpikeSynth(L.LightningModule):
         # ------------------ SLSTM branch ------------------
         if neuron_type == "SLSTM":
             num_layers = len(self.lif_layers)
-            
-            # Initialize states
-            syn_states, mem_states = [], []
+            syn_states = []
+            mem_states = []
             for layer in self.lif_layers:
                 syn, mem = layer.reset_mem()
                 syn_states.append(syn.to(x_seq.device))
                 mem_states.append(mem.to(x_seq.device))
-        
+
             track_layer_time = (skip_k != -1)
             layer_outputs_time = [ [] for _ in range(num_layers) ] if track_layer_time else None
             spike_acc = [0.0] * num_layers
-        
+
             for t in range(T):
-                curr_input = x_seq[t] 
+                curr_input = x_seq[t]  # (B, F_in or F_hidden)
                 for i, layer in enumerate(self.lif_layers):
-                    processed_input = curr_input
+                    # --- ORDER: 1) skipping (temporal & layer), 2) normalization/BNTT, 3) layer call ---
+                    input_to_layer = curr_input
 
-                    processed_input = self._norm_and_bntt(i, processed_input, t=t, per_timestep=True)
-  
-                    temp_proj = self._temporal_proj(i, t, x_seq)
-                    if temp_proj is not None:
-                        processed_input = processed_input + temp_proj
+                    # temporal skip (adds projected previous input sequence element)
+                    prev_proj = self._temporal_proj(i, t, x_seq)
+                    if prev_proj is not None:
+                        input_to_layer = input_to_layer + prev_proj
 
-                    layer_proj = self._layer_skip_proj(i, i, t, track_layer_time, layer_outputs_time)
-                    if layer_proj is not None:
-                        processed_input = processed_input + layer_proj
-        
-                    # ---- Pass through SLSTM cell ----
-                    spk, syn_states[i], mem_states[i] = layer(processed_input, syn_states[i], mem_states[i])
-        
+                    # layer skip: use earlier layer output from the same time step (if tracking)
+                    skip_proj = self._layer_skip_proj(i, i, t, track_layer_time, layer_outputs_time)
+                    if skip_proj is not None:
+                        input_to_layer = input_to_layer + skip_proj
+
+                    # normalization & BNTT (per-timestep)
+                    # Only applied if feature dims match the per-layer norm/BNTT expectations.
+                    input_to_layer = self._norm_and_bntt(i, input_to_layer, t=t, per_timestep=True)
+
+                    # now call layer with normalized/skipped input
+                    spk, syn_states[i], mem_states[i] = layer(input_to_layer, syn_states[i], mem_states[i])
+
                     if track_layer_time:
                         layer_outputs_time[i].append(spk)
-        
+
                     curr_input = spk
                     spike_acc[i] += spk.mean().item()
-        
+
             last_layer_seq = self._stack_last_layer_seq(layer_outputs_time, T, curr_input)
             self.spike_counts = [c / T for c in spike_acc]
             x_seq = last_layer_seq
 
-
         # ------------------ Leaky (per-step) branch ------------------
         elif neuron_type == "Leaky":
             num_layers = len(self.lif_layers)
-            # initialize mem states
             mem_states = [layer.init_leaky().to(x_seq.device) for layer in self.lif_layers]
             track_layer_time = (skip_k != -1)
             layer_outputs_time = [[] for _ in range(num_layers)] if track_layer_time else None
@@ -396,7 +363,7 @@ class SpikeSynth(L.LightningModule):
             curr_input = None
 
             for t in range(T):
-                raw_input_t = x_seq[t]  # (B, F_in)
+                raw_input_t = x_seq[t]
                 for i, layer in enumerate(self.lif_layers):
                     lin = self.leaky_linears[i]
                     if i == 0:
@@ -404,20 +371,16 @@ class SpikeSynth(L.LightningModule):
                     else:
                         weighted_input = lin(curr_input)
 
-                    # temporal skip
                     prev_proj = self._temporal_proj(i, t, x_seq)
                     if prev_proj is not None:
                         weighted_input = weighted_input + prev_proj
 
-                    # layer skip
                     skip_proj = self._layer_skip_proj(i, i, t, track_layer_time, layer_outputs_time)
                     if skip_proj is not None:
                         weighted_input = weighted_input + skip_proj
 
-                    # normalization and BNTT (per-timestep)
                     weighted_input = self._norm_and_bntt(i, weighted_input, t=t, per_timestep=True)
 
-                    # layer update
                     spk, mem_states[i] = layer(weighted_input, mem_states[i])
 
                     if track_layer_time:
@@ -454,20 +417,16 @@ class SpikeSynth(L.LightningModule):
                     else:
                         weighted_input = lin(curr_input)
 
-                    # temporal skip
                     prev_proj = self._temporal_proj(i, t, x_seq)
                     if prev_proj is not None:
                         weighted_input = weighted_input + prev_proj
 
-                    # layer skip
                     skip_proj = self._layer_skip_proj(i, i, t, track_layer_time, layer_outputs_time)
                     if skip_proj is not None:
                         weighted_input = weighted_input + skip_proj
 
-                    # normalization & bntt (per-timestep)
                     weighted_input = self._norm_and_bntt(i, weighted_input, t=t, per_timestep=True)
 
-                    # RLeaky expects (input, spk_state, mem_state)
                     spk, mem_states[i] = layer(weighted_input, spk_states[i], mem_states[i])
                     spk_states[i] = spk
 
@@ -483,26 +442,23 @@ class SpikeSynth(L.LightningModule):
 
         # ------------------ LeakyParallel / default sequence-processing neuron ------------------
         else:
-            # 'LeakyParallel' case: lif(x_seq) returns (T, B, hidden)
             layer_outputs = []
             for i, lif in enumerate(self.lif_layers):
-                lif_out = lif(x_seq)  # (T, B, F_hidden)
-                
-                self.spike_counts.append(lif_out.mean())
+                # --- ORDER: 1) compute temporal + layer skip on input sequence, 2) normalize, 3) feed into lif ---
+                input_seq = x_seq  # (T, B, F_in or F_hidden)
 
-                # normalization (apply layernorm across (B, F) per time step) & BNTT
-                lif_out = self._norm_and_bntt(i, lif_out, per_timestep=False)
-
-                # Temporal skip: when skip_k invalid, just assign lif_out; else add projected previous states
+                # temporal skip projection (sequence-level)
                 if skip_k == -1 or skip_k >= T:
-                    x_seq = lif_out
+                    prev_proj = None
                 else:
                     prev = torch.zeros_like(x_seq)
                     prev[skip_k:] = x_seq[:-skip_k]
                     prev_proj = self.temp_skip_projs[i](prev)
-                    x_seq = lif_out + prev_proj
 
-                # Layer-wise skip (non-time-tracked)
+                if prev_proj is not None:
+                    input_seq = input_seq + prev_proj
+
+                # layer-wise skip (non-time-tracked): add previous layer's output seq if available
                 if self.hparams.layer_skip > 0 and i >= self.hparams.layer_skip:
                     skip_layer_out = layer_outputs[i - self.hparams.layer_skip]
                     if skip_layer_out is not None:
@@ -510,7 +466,19 @@ class SpikeSynth(L.LightningModule):
                             skip_proj = self.layer_skip_projs[i](skip_layer_out)
                         else:
                             skip_proj = skip_layer_out
-                        x_seq = x_seq + skip_proj
+                        input_seq = input_seq + skip_proj
+
+                # Now normalization & BNTT across the sequence BEFORE calling the layer
+                input_seq = self._norm_and_bntt(i, input_seq, per_timestep=False)
+
+                # feed into layer
+                lif_out = lif(input_seq)  # (T, B, F_hidden)
+
+                # record spikes
+                self.spike_counts.append(lif_out.mean())
+
+                # update x_seq for next layer
+                x_seq = lif_out
 
                 layer_outputs.append(x_seq)
 
@@ -519,7 +487,6 @@ class SpikeSynth(L.LightningModule):
         out = self.output_layer(x_seq_b).squeeze()
         return out
 
-    
     def training_step(self, batch, batch_idx):
         X_batch, y_batch = batch
         outputs = self(X_batch)
@@ -601,3 +568,4 @@ class SpikeSynth(L.LightningModule):
             shuffle=False,
             num_workers=4,
         )
+
