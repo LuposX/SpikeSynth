@@ -7,6 +7,8 @@ import pytorch_lightning as L
 import torch
 import torch.nn as nn
 
+import re
+
 
 class SpikeSynth(L.LightningModule):
     def __init__(self,
@@ -499,22 +501,44 @@ class SpikeSynth(L.LightningModule):
         }
         self.log_dict(spike_logs, on_step=False, on_epoch=True, sync_dist=True)
 
-        if batch_idx % self.hparams.log_every_n_steps == 0 and batch_idx > 0:
-            grad_means = {}
-            for name, param in self.named_parameters():
-                if param.grad is not None:
-                    parts = name.split('.')
-                    if parts[0] == "lif_layers" and len(parts) > 1:
-                        layer_name = ".".join(parts[:2])
-                    else:
-                        layer_name = parts[0]
-                    grad_means.setdefault(layer_name, []).append(param.grad.abs().mean().item())
-
-            grad_means = {
-                f"grad_mean/{layer}": sum(vals) / len(vals)
-                for layer, vals in grad_means.items()
+        # --- replace current gradient-aggregation block with this ---
+        grad_means = {}
+        for name, param in self.named_parameters():
+            if param.grad is None:
+                continue
+        
+            # name examples: "lif_layers.0.rleaky.weight", "leaky_linears.2.weight", "output_layer.weight"
+            parts = name.split('.')
+        
+            # If it's one of our ModuleLists, try to keep the index (e.g. 'leaky_linears.2')
+            module_lists = {
+                "lif_layers",
+                "leaky_linears",
+                "layer_skip_projs",
+                "temp_skip_projs",
+                "layer_bntt",
+                "layer_norms",
             }
-            self.log_dict(grad_means, on_step=True, on_epoch=False, sync_dist=False)
+        
+            if parts[0] in module_lists and len(parts) > 1 and parts[1].isdigit():
+                layer_name = f"{parts[0]}.{parts[1]}"   # e.g. "leaky_linears.2"
+            elif parts[0] == "lif_layers" and len(parts) > 1:
+                # lif_layers may have deeper nested names (e.g. lif_layers.0.<submodule>),
+                # but we still want lif_layers.<index>
+                layer_name = ".".join(parts[:2])
+            else:
+                # fallback to top-level module name for other params (e.g. output_layer)
+                layer_name = parts[0]
+        
+            grad_means.setdefault(layer_name, []).append(param.grad.abs().mean().item())
+        
+        # average and prefix with a clear metric name
+        grad_means = {
+            f"grad_mean/{layer}": sum(vals) / len(vals)
+            for layer, vals in grad_means.items()
+        }
+        self.log_dict(grad_means, on_step=True, on_epoch=False, sync_dist=False)
+
 
         return loss
 
